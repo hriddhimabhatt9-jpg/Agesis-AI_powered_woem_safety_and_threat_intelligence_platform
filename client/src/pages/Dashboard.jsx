@@ -44,7 +44,7 @@ export default function Dashboard() {
           { label: 'Threat Level', value: 'Low', icon: Activity, color: 'text-emerald-400' },
           { label: 'Evidence Items', value: '0', icon: Archive, color: 'text-blue-400' },
         ].map((card, i) => (
-          <div key={i} className="glass-card p-4 sm:p-5">
+          <div key={i} className={`glass-card p-4 sm:p-5 ${i < 2 ? 'animate-safety-pulse' : ''}`}>
             <div className="flex items-center gap-2 mb-2">
               <card.icon size={16} className={card.color} />
               <span className="text-surface-400 text-xs font-medium">{card.label}</span>

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { alertAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import { AlertTriangle, MapPin, Loader2, Phone, Shield, Check, X } from 'lucide-react';
+import { AlertTriangle, MapPin, Loader2, Phone, Shield, Check, X, Mic, MicOff } from 'lucide-react';
 
 export default function PanicButton() {
   const { user } = useAuth();
@@ -11,6 +11,8 @@ export default function PanicButton() {
   const [result, setResult] = useState(null);
   const [countdown, setCountdown] = useState(null);
   const [countdownInterval, setCountdownInterval] = useState(null);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
 
   const getContacts = () => {
     const contacts = [];
@@ -22,6 +24,45 @@ export default function PanicButton() {
       if (stored.length && !contacts.length) return stored;
     } catch {}
     return contacts;
+  };
+
+  useEffect(() => {
+    // Initialize speech recognition
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
+        console.log('Transcript:', transcript);
+        if (transcript.includes('help aegesis') || transcript.includes('emergency')) {
+          triggerPanic();
+        }
+      };
+
+      recognition.onend = () => {
+        if (isListening) recognition.start();
+      };
+
+      recognitionRef.current = recognition;
+    }
+
+    return () => {
+      if (recognitionRef.current) recognitionRef.current.stop();
+    };
+  }, []);
+
+  const toggleVoiceSOS = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+    } else {
+      recognitionRef.current?.start();
+      setIsListening(true);
+    }
   };
 
   const triggerPanic = () => {
@@ -111,6 +152,17 @@ export default function PanicButton() {
           </div>
 
           <p className="text-surface-500 text-xs mt-6">3-second countdown before alert is sent</p>
+
+          {/* Voice Activation Toggle */}
+          <div className="mt-8 flex flex-col items-center">
+            <button 
+              onClick={toggleVoiceSOS}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium transition-all ${isListening ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-surface-800 text-surface-400 border border-surface-700'}`}
+            >
+              {isListening ? <><Mic size={14} className="animate-pulse" /> Voice SOS Active</> : <><MicOff size={14} /> Voice SOS Disabled</>}
+            </button>
+            <p className="text-[10px] text-surface-500 mt-2">Trigger by saying "Help Aegesis"</p>
+          </div>
 
           {/* Contacts Preview */}
           <div className="glass-card p-4 mt-6 text-left">

@@ -78,6 +78,13 @@ export const AuthProvider = ({ children }) => {
     setUser(prev => {
       const updated = { ...prev, ...updates };
       localStorage.setItem('aegesis_user', JSON.stringify(updated));
+      
+      // Cache contacts specifically for offline SOS
+      const contacts = [];
+      if (updated.primaryEmergencyContact?.name) contacts.push(updated.primaryEmergencyContact);
+      if (updated.additionalEmergencyContacts?.length) contacts.push(...updated.additionalEmergencyContacts);
+      if (contacts.length) localStorage.setItem('aegesis_contacts', JSON.stringify(contacts));
+      
       return updated;
     });
   }, []);

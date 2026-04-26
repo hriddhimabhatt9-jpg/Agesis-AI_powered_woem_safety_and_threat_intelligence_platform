@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
-import { Shield, LayoutDashboard, Brain, MapPin, AlertTriangle, Archive, User, LogOut, Menu, X, Heart } from 'lucide-react';
+import { useDisguise } from '../../context/DisguiseContext';
+import { Shield, LayoutDashboard, Brain, MapPin, AlertTriangle, Archive, User, LogOut, Menu, X, Heart, EyeOff } from 'lucide-react';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -17,6 +18,7 @@ const navItems = [
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, logout } = useAuth();
+  const { toggleDisguise } = useDisguise();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -56,7 +58,9 @@ export default function Navbar() {
           </div>
 
           {/* Profile */}
-          <div className="flex items-center gap-3">
+            <button onClick={toggleDisguise} className="btn-icon text-surface-500 hover:text-primary-400" title="Stealth Mode">
+              <EyeOff size={18} />
+            </button>
             <Link to="/profile" className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200
               ${isActive('/profile') ? 'text-primary-400 bg-primary-500/10' : 'text-surface-400 hover:text-surface-200 hover:bg-surface-800'}`}>
               <div className="w-7 h-7 rounded-full bg-gradient-primary flex items-center justify-center text-xs font-bold text-white">
@@ -68,8 +72,7 @@ export default function Navbar() {
               <LogOut size={18} />
             </button>
           </div>
-        </div>
-      </nav>
+        </nav>
 
       {/* Mobile Top Bar */}
       <nav className="lg:hidden fixed top-0 left-0 right-0 z-40 h-14 bg-surface-900/90 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-4">
@@ -115,6 +118,10 @@ export default function Navbar() {
                   className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-surface-400 hover:text-white hover:bg-surface-800">
                   <User size={18} /><span>Profile</span>
                 </Link>
+                <button onClick={toggleDisguise}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-surface-400 hover:text-white hover:bg-surface-800">
+                  <EyeOff size={18} /><span>Stealth Mode</span>
+                </button>
               </div>
               <button onClick={handleLogout}
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 mt-4">

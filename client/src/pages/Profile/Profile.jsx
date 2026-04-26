@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { userAPI } from '../../services/api';
 import PageWrapper from '../../components/layout/PageWrapper';
 import { User, Phone, MapPin, Briefcase, Shield, Save, Plus, Trash2, Check, Eye, EyeOff } from 'lucide-react';
+import { handlePhoneInput, getPhoneError, isValidIndianPhone } from '../../utils/phoneValidation';
 
 export default function Profile() {
   const { user, updateUser, completeOnboarding, needsOnboarding } = useAuth();
@@ -12,6 +13,7 @@ export default function Profile() {
   const [step, setStep] = useState(user?.profileCompleted ? 'view' : (user?.onboardingStep || 1));
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
+  const [phoneErrors, setPhoneErrors] = useState({});
 
   const [step1, setStep1] = useState({
     name: user?.name || '', phone: user?.phone || '',
@@ -26,8 +28,24 @@ export default function Profile() {
 
   const [privacy, setPrivacy] = useState(user?.privacySettings || { showLocation: false, showPhone: false, showProfession: false });
 
+  const updatePhone = (field, value) => {
+    const cleaned = handlePhoneInput(value);
+    const error = getPhoneError(cleaned);
+    setPhoneErrors(prev => ({ ...prev, [field]: error }));
+    return cleaned;
+  };
+
   const handleStep1 = async (e) => {
     e.preventDefault();
+    // Validate phones before submitting
+    if (!isValidIndianPhone(step1.phone)) {
+      setPhoneErrors(prev => ({ ...prev, userPhone: 'Enter a valid 10-digit Indian mobile number' }));
+      return;
+    }
+    if (!isValidIndianPhone(step1.primaryEmergencyContact.phone)) {
+      setPhoneErrors(prev => ({ ...prev, primaryPhone: 'Enter a valid 10-digit Indian mobile number' }));
+      return;
+    }
     setSaving(true);
     try {
       const { data } = await userAPI.updateStep1(step1);
@@ -121,8 +139,9 @@ export default function Profile() {
               <input required value={step1.name} onChange={e => setStep1({ ...step1, name: e.target.value })} className="input-field" placeholder="Your full name" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-surface-300 mb-1.5">Phone Number *</label>
-              <input required value={step1.phone} onChange={e => setStep1({ ...step1, phone: e.target.value })} className="input-field" placeholder="+91 XXXXXXXXXX" />
+              <label className="block text-sm font-medium text-surface-300 mb-1.5">Phone Number * <span className="text-surface-500 font-normal">(10 digits)</span></label>
+              <input required value={step1.phone} onChange={e => { const v = updatePhone('userPhone', e.target.value); setStep1({ ...step1, phone: v }); }} className={`input-field ${phoneErrors.userPhone ? 'border-red-500/50' : ''}`} placeholder="+91 XXXXXXXXXX" type="tel" maxLength={15} />
+              {phoneErrors.userPhone && <p className="text-red-400 text-xs mt-1">{phoneErrors.userPhone}</p>}
             </div>
           </div>
 
@@ -134,9 +153,10 @@ export default function Profile() {
                 onChange={e => setStep1({ ...step1, primaryEmergencyContact: { ...step1.primaryEmergencyContact, name: e.target.value } })} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-surface-300 mb-1.5">Contact Phone *</label>
-              <input required value={step1.primaryEmergencyContact.phone} className="input-field" placeholder="+91 XXXXXXXXXX"
-                onChange={e => setStep1({ ...step1, primaryEmergencyContact: { ...step1.primaryEmergencyContact, phone: e.target.value } })} />
+              <label className="block text-sm font-medium text-surface-300 mb-1.5">Contact Phone * <span className="text-surface-500 font-normal">(10 digits)</span></label>
+              <input required value={step1.primaryEmergencyContact.phone} className={`input-field ${phoneErrors.primaryPhone ? 'border-red-500/50' : ''}`} placeholder="+91 XXXXXXXXXX" type="tel" maxLength={15}
+                onChange={e => { const v = updatePhone('primaryPhone', e.target.value); setStep1({ ...step1, primaryEmergencyContact: { ...step1.primaryEmergencyContact, phone: v } }); }} />
+              {phoneErrors.primaryPhone && <p className="text-red-400 text-xs mt-1">{phoneErrors.primaryPhone}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-surface-300 mb-1.5">Contact Email</label>
@@ -197,8 +217,9 @@ export default function Profile() {
                 <div className="grid sm:grid-cols-2 gap-3">
                   <input value={c.name} placeholder="Name" className="input-field text-sm py-2"
                     onChange={e => { const arr = [...step2.additionalEmergencyContacts]; arr[i] = { ...arr[i], name: e.target.value }; setStep2({ ...step2, additionalEmergencyContacts: arr }); }} />
-                  <input value={c.phone} placeholder="Phone" className="input-field text-sm py-2"
-                    onChange={e => { const arr = [...step2.additionalEmergencyContacts]; arr[i] = { ...arr[i], phone: e.target.value }; setStep2({ ...step2, additionalEmergencyContacts: arr }); }} />
+                  <input value={c.phone} placeholder="Phone (10 digits)" className={`input-field text-sm py-2 ${phoneErrors[`add${i}`] ? 'border-red-500/50' : ''}`} type="tel" maxLength={15}
+                    onChange={e => { const v = updatePhone(`add${i}`, e.target.value); const arr = [...step2.additionalEmergencyContacts]; arr[i] = { ...arr[i], phone: v }; setStep2({ ...step2, additionalEmergencyContacts: arr }); }} />
+                  {phoneErrors[`add${i}`] && <p className="text-red-400 text-xs mt-0.5">{phoneErrors[`add${i}`]}</p>}
                 </div>
               </div>
             ))}

@@ -1,6 +1,10 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
+import { DisguiseProvider, useDisguise } from './context/DisguiseContext';
+
+// Components
+import DecoyNews from './components/safety/DecoyNews';
 
 // Layout
 import Navbar from './components/layout/Navbar';
@@ -11,6 +15,9 @@ import Login from './pages/Auth/Login';
 import Register from './pages/Auth/Register';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile/Profile';
+
+// Safety Features
+import SafetyOnboarding from './components/onboarding/SafetyOnboarding';
 
 // Predict
 import MessageAnalyzer from './pages/Predict/MessageAnalyzer';
@@ -38,6 +45,7 @@ import LegalReport from './pages/Prove/LegalReport';
 
 // Recovery
 import EmotionalSupport from './pages/Recovery/EmotionalSupport';
+import LegalRoadmap from './pages/Recovery/LegalRoadmap';
 
 // Protected Route wrapper — forces login + onboarding for new users
 function ProtectedRoute({ children, skipOnboarding }) {
@@ -50,8 +58,10 @@ function ProtectedRoute({ children, skipOnboarding }) {
     );
   }
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  // Force new users to profile first
-  if (needsOnboarding && !skipOnboarding) return <Navigate to="/profile" replace />;
+  // Show onboarding overlay for new users
+  if (needsOnboarding && !skipOnboarding) {
+    return <SafetyOnboarding onComplete={() => window.location.reload()} />;
+  }
   return children;
 }
 
@@ -72,6 +82,12 @@ function AppLayout({ children }) {
 }
 
 function AppRoutes() {
+  const { isDisguised } = useDisguise();
+
+  if (isDisguised) {
+    return <DecoyNews />;
+  }
+
   return (
     <Routes>
       {/* Public */}
@@ -109,6 +125,7 @@ function AppRoutes() {
 
       {/* Recovery */}
       <Route path="/recovery/support" element={<ProtectedRoute><AppLayout><EmotionalSupport /></AppLayout></ProtectedRoute>} />
+      <Route path="/recovery/roadmap" element={<ProtectedRoute><AppLayout><LegalRoadmap /></AppLayout></ProtectedRoute>} />
 
       {/* Catch all */}
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -119,11 +136,13 @@ function AppRoutes() {
 export default function App() {
   return (
     <Router>
-      <AuthProvider>
-        <SocketProvider>
-          <AppRoutes />
-        </SocketProvider>
-      </AuthProvider>
+      <DisguiseProvider>
+        <AuthProvider>
+          <SocketProvider>
+            <AppRoutes />
+          </SocketProvider>
+        </AuthProvider>
+      </DisguiseProvider>
     </Router>
   );
 }
