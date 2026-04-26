@@ -13,6 +13,7 @@ export default function LiveTracking() {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: isApiKeyValid ? import.meta.env.VITE_GOOGLE_MAPS_API_KEY : '',
+    libraries: ['places', 'visualization'],
     region: 'IN',
     language: 'en'
   });
@@ -23,6 +24,7 @@ export default function LiveTracking() {
   const [path, setPath] = useState([]);
   const [error, setError] = useState('');
   const [speed, setSpeed] = useState(0);
+  const [safeZones, setSafeZones] = useState([]);
   const watchIdRef = useRef(null);
 
   const onLoad = useCallback(function callback(map) { setMap(map); }, []);
@@ -108,6 +110,14 @@ export default function LiveTracking() {
               options={{ styles: [{ elementType: "geometry", stylers: [{ color: "#242f3e" }] },{ elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },{ elementType: "labels.text.fill", stylers: [{ color: "#746855" }] }, { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] }] }}>
               {location && <Marker position={location} icon={{ path: window.google?.maps?.SymbolPath?.CIRCLE, scale: 8, fillColor: '#7c3aed', fillOpacity: 1, strokeWeight: 2, strokeColor: '#ffffff' }} />}
               {path.length > 1 && <Polyline path={path} options={{ strokeColor: '#7c3aed', strokeOpacity: 0.8, strokeWeight: 4 }} />}
+              {safeZones.map((zone, idx) => (
+                <Marker key={idx} position={zone.geometry.location} title={zone.name}
+                  icon={{
+                    url: zone.category === 'police' ? 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png' : 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
+                    scaledSize: new window.google.maps.Size(24, 24)
+                  }}
+                />
+              ))}
             </GoogleMap>
           )}
         </div>

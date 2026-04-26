@@ -4,7 +4,7 @@ import PageWrapper from '../../components/layout/PageWrapper';
 import { Route, MapPin, Shield, Loader2, Navigation } from 'lucide-react';
 import { GoogleMap, useJsApiLoader, DirectionsService, DirectionsRenderer, Autocomplete } from '@react-google-maps/api';
 
-const libraries = ['places'];
+const libraries = ['places', 'visualization'];
 
 const containerStyle = { width: '100%', height: '300px', borderRadius: '0.75rem', marginBottom: '1.5rem' };
 const defaultCenter = { lat: 28.6139, lng: 77.2090 }; // Delhi, India
@@ -27,6 +27,8 @@ export default function SafeRoute() {
   const [routes, setRoutes] = useState(null);
   const [loading, setLoading] = useState(false);
   const [directions, setDirections] = useState(null);
+  const [safeZones, setSafeZones] = useState([]);
+  const [showSafeZones, setShowSafeZones] = useState(true);
 
   const findRoutes = async () => {
     if (!origin.trim() || !destination.trim()) return;
@@ -57,6 +59,25 @@ export default function SafeRoute() {
   const startNavigation = (dest) => {
     const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest || destination)}&travelmode=walking`;
     window.open(url, '_blank');
+  };
+
+  const findNearbySafeZones = (location) => {
+    if (!window.google || !location) return;
+    const service = new window.google.maps.places.PlacesService(document.createElement('div'));
+    
+    // Search for police stations
+    service.nearbySearch({ location, radius: 5000, type: ['police'] }, (results, status) => {
+      if (status === window.google.maps.places.PlacesServiceStatus.OK) {
+        setSafeZones(prev => [...prev, ...results.map(r => ({ ...r, category: 'police' }))]);
+      }
+    });
+
+    // Search for hospitals
+    service.nearbySearch({ location, radius: 5000, type: ['hospital'] }, (results, status) => {
+      if (status === window.google.maps.places.PlacesServiceStatus.OK) {
+        setSafeZones(prev => [...prev, ...results.map(r => ({ ...r, category: 'hospital' }))]);
+      }
+    });
   };
 
   const onOriginLoad = (autocomplete) => setOriginAutocomplete(autocomplete);
@@ -119,9 +140,28 @@ export default function SafeRoute() {
               </div>
             ) : isLoaded ? (
               <div className="glass-card p-1">
-                <GoogleMap mapContainerStyle={containerStyle} center={defaultCenter} zoom={13} options={{ styles: [{ elementType: "geometry", stylers: [{ color: "#242f3e" }] },{ elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },{ elementType: "labels.text.fill", stylers: [{ color: "#746855" }] }] }}>
+                <GoogleMap mapContainerStyle={containerStyle} center={defaultCenter} zoom={13} 
+                  onLoad={(map) => {
+                    if (directions?.routes?.[0]?.legs?.[0]?.start_location) {
+                      findNearbySafeZones(directions.routes[0].legs[0].start_location);
+                    }
+                  }}
+                  options={{ styles: [{ elementType: "geometry", stylers: [{ color: "#242f3e" }] },{ elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },{ elementType: "labels.text.fill", stylers: [{ color: "#746855" }] }] }}>
                   {directions && <DirectionsRenderer directions={directions} options={{ polylineOptions: { strokeColor: '#10b981', strokeWeight: 5 } }} />}
+                  {showSafeZones && safeZones.map((zone, idx) => (
+                    <Marker key={idx} position={zone.geometry.location} 
+                      title={zone.name}
+                      icon={{
+                        url: zone.category === 'police' ? 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png' : 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
+                        scaledSize: new window.google.maps.Size(32, 32)
+                      }}
+                    />
+                  ))}
                 </GoogleMap>
+                <div className="p-3 flex justify-between items-center bg-surface-900/50 rounded-b-xl border-t border-surface-800">
+                  <span className="text-xs text-surface-400">🛡️ Police & Hospitals markers active</span>
+                  <button onClick={() => setShowSafeZones(!showSafeZones)} className="text-xs text-primary-400 hover:underline">{showSafeZones ? 'Hide Safe Zones' : 'Show Safe Zones'}</button>
+                </div>
               </div>
             ) : (
               <div className="flex justify-center p-8">
