@@ -13,6 +13,8 @@ export default function LiveTracking() {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: isApiKeyValid ? import.meta.env.VITE_GOOGLE_MAPS_API_KEY : '',
+    region: 'IN',
+    language: 'en'
   });
 
   const [map, setMap] = useState(null);
@@ -115,8 +117,9 @@ export default function LiveTracking() {
             <h3 className="text-white font-semibold mb-4 flex items-center gap-2"><Navigation size={18} className="text-primary-400" /> Controls</h3>
             <div className="space-y-3">
               <button onClick={getCurrentLocation} className="btn-secondary w-full flex items-center justify-center gap-2 text-sm"><Locate size={16} /> Get My Location</button>
-              <button onClick={toggleTracking} className={`w-full flex items-center justify-center gap-2 text-sm py-3 rounded-xl font-semibold transition-all ${tracking ? 'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20' : 'btn-primary'}`}>{tracking ? '⏹ Stop Tracking' : '▶ Start Live Tracking'}</button>
+              <button onClick={toggleTracking} className={`w-full flex items-center justify-center gap-2 text-sm py-3 rounded-xl font-semibold transition-all ${tracking ? 'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20' : 'btn-primary shadow-lg shadow-primary-500/20'}`}>{tracking ? '⏹ Stop Tracking' : '▶ Start Live Tracking'}</button>
               <button onClick={shareLocation} disabled={!location} className="btn-secondary w-full flex items-center justify-center gap-2 text-sm"><Share2 size={16} /> Share Location</button>
+              <button onClick={() => location && window.open(`https://www.google.com/maps/dir/?api=1&destination=${location.lat},${location.lng}`, '_blank')} className="btn-secondary w-full flex items-center justify-center gap-2 text-sm border-emerald-500/20 text-emerald-400"><Navigation size={16} /> Open in Native Maps</button>
             </div>
           </div>
 

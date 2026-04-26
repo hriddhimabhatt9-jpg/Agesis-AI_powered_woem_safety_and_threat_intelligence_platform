@@ -2,7 +2,9 @@ import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import PageWrapper from '../../components/layout/PageWrapper';
 import { Route, MapPin, Shield, Loader2, Navigation } from 'lucide-react';
-import { GoogleMap, useJsApiLoader, DirectionsService, DirectionsRenderer } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, DirectionsService, DirectionsRenderer, Autocomplete } from '@react-google-maps/api';
+
+const libraries = ['places'];
 
 const containerStyle = { width: '100%', height: '300px', borderRadius: '0.75rem', marginBottom: '1.5rem' };
 const defaultCenter = { lat: 28.6139, lng: 77.2090 }; // Delhi, India
@@ -13,10 +15,15 @@ export default function SafeRoute() {
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: isApiKeyValid ? import.meta.env.VITE_GOOGLE_MAPS_API_KEY : '',
+    libraries,
+    region: 'IN',
+    language: 'en'
   });
 
   const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
+  const [originAutocomplete, setOriginAutocomplete] = useState(null);
+  const [destAutocomplete, setDestAutocomplete] = useState(null);
   const [routes, setRoutes] = useState(null);
   const [loading, setLoading] = useState(false);
   const [directions, setDirections] = useState(null);
@@ -45,6 +52,24 @@ export default function SafeRoute() {
       ]);
       setLoading(false);
     }, 1500);
+  const startNavigation = (dest) => {
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest || destination)}&travelmode=walking`;
+    window.open(url, '_blank');
+  };
+
+  const onOriginLoad = (autocomplete) => setOriginAutocomplete(autocomplete);
+  const onDestLoad = (autocomplete) => setDestAutocomplete(autocomplete);
+
+  const onOriginPlaceChanged = () => {
+    if (originAutocomplete !== null) {
+      setOrigin(originAutocomplete.getPlace().formatted_address || originAutocomplete.getPlace().name);
+    }
+  };
+
+  const onDestPlaceChanged = () => {
+    if (destAutocomplete !== null) {
+      setDestination(destAutocomplete.getPlace().formatted_address || destAutocomplete.getPlace().name);
+    }
   };
 
   const scoreColor = { emerald: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', amber: 'text-amber-400 bg-amber-500/10 border-amber-500/20', red: 'text-red-400 bg-red-500/10 border-red-500/20' };
@@ -55,13 +80,25 @@ export default function SafeRoute() {
         <div className="glass-card p-6 mb-6">
           <div className="grid sm:grid-cols-2 gap-4 mb-4">
             <div><label className="block text-sm text-surface-300 mb-1.5">From</label>
-              <div className="relative"><MapPin size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-400" />
-                <input value={origin} onChange={e => setOrigin(e.target.value)} className="input-field pl-10" placeholder="Your location" />
+              <div className="relative"><MapPin size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-400 z-10" />
+                {isLoaded ? (
+                  <Autocomplete onLoad={onOriginLoad} onPlaceChanged={onOriginPlaceChanged}>
+                    <input value={origin} onChange={e => setOrigin(e.target.value)} className="input-field pl-10" placeholder="Your location" />
+                  </Autocomplete>
+                ) : (
+                  <input value={origin} onChange={e => setOrigin(e.target.value)} className="input-field pl-10" placeholder="Your location" />
+                )}
               </div>
             </div>
             <div><label className="block text-sm text-surface-300 mb-1.5">To</label>
-              <div className="relative"><Navigation size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-red-400" />
-                <input value={destination} onChange={e => setDestination(e.target.value)} className="input-field pl-10" placeholder="Destination" />
+              <div className="relative"><Navigation size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-red-400 z-10" />
+                {isLoaded ? (
+                  <Autocomplete onLoad={onDestLoad} onPlaceChanged={onDestPlaceChanged}>
+                    <input value={destination} onChange={e => setDestination(e.target.value)} className="input-field pl-10" placeholder="Destination" />
+                  </Autocomplete>
+                ) : (
+                  <input value={destination} onChange={e => setDestination(e.target.value)} className="input-field pl-10" placeholder="Destination" />
+                )}
               </div>
             </div>
           </div>
@@ -109,6 +146,11 @@ export default function SafeRoute() {
                 <div className="mt-3 w-full h-2 bg-surface-700 rounded-full overflow-hidden">
                   <div className={`h-full rounded-full ${route.color === 'emerald' ? 'bg-emerald-500' : route.color === 'amber' ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${route.safetyScore}%` }} />
                 </div>
+                {i === 0 && (
+                  <button onClick={(e) => { e.stopPropagation(); startNavigation(); }} className="mt-4 w-full py-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg text-xs font-bold hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2">
+                    <Navigation size={14} /> Start Live Navigation
+                  </button>
+                )}
               </motion.div>
             ))}
           </div>
