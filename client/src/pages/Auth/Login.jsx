@@ -16,11 +16,24 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
+    
+    // Add a safety timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      if (loading) {
+        setLoading(false);
+        setError('Request timed out. Please try again.');
+      }
+    }, 15000);
+
     try {
       await login(form.email, form.password);
+      clearTimeout(timeout);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.error || 'Login failed. Please try again.');
+      clearTimeout(timeout);
+      const msg = err.response?.data?.error || err.message || 'Login failed. Please try again.';
+      setError(msg);
+      console.error('Login error:', err);
     } finally {
       setLoading(false);
     }

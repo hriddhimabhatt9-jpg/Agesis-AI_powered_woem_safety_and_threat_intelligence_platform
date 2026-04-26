@@ -17,11 +17,29 @@ export default function Register() {
     setError('');
     if (form.password.length < 6) { setError('Password must be at least 6 characters'); return; }
     setLoading(true);
+
+    const timeout = setTimeout(() => {
+      if (loading) {
+        setLoading(false);
+        setError('Request timed out. Please try again.');
+      }
+    }, 15000);
+
     try {
       await register(form);
+      clearTimeout(timeout);
       navigate('/profile');
     } catch (err) {
-      setError(err.response?.data?.error || 'Registration failed.');
+      clearTimeout(timeout);
+      const data = err.response?.data;
+      let msg = data?.error || err.message || 'Registration failed.';
+      
+      if (data?.details && Array.isArray(data.details)) {
+        msg = `${msg}: ${data.details.map(d => d.message).join(', ')}`;
+      }
+      
+      setError(msg);
+      console.error('Registration error:', err);
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import config from '../config/index.js';
 import { validate } from '../middleware/validate.js';
 import { auth } from '../middleware/auth.js';
@@ -30,6 +31,9 @@ router.post('/register', [
 
     // Try MongoDB first
     try {
+      if (mongoose.connection.readyState !== 1) {
+        throw new Error('Database not connected');
+      }
       const User = (await import('../models/User.js')).default;
       const existingUser = await User.findOne({ email });
       if (existingUser) {
@@ -87,6 +91,9 @@ router.post('/login', [
     const { email, password } = req.body;
 
     try {
+      if (mongoose.connection.readyState !== 1) {
+        throw new Error('Database not connected');
+      }
       const User = (await import('../models/User.js')).default;
       const user = await User.findOne({ email }).select('+password');
       if (!user || !user.password) {
@@ -122,6 +129,9 @@ router.post('/google', async (req, res) => {
     const { credential, name, email, picture } = req.body;
     
     try {
+      if (mongoose.connection.readyState !== 1) {
+        throw new Error('Database not connected');
+      }
       const User = (await import('../models/User.js')).default;
       let user = await User.findOne({ email });
 
