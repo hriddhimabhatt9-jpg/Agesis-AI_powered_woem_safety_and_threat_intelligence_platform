@@ -31,6 +31,7 @@ import AttackSimulation from './pages/Predict/AttackSimulation';
 import SafetyModes from './pages/Protect/SafetyModes';
 import LiveTracking from './pages/Protect/LiveTracking';
 import SafeRoute from './pages/Protect/SafeRoute';
+import SafetyMap from './pages/Protect/SafetyMap';
 import VisualGuide from './pages/Protect/VisualGuide';
 import InvisibleMode from './pages/Protect/InvisibleMode';
 
@@ -111,6 +112,7 @@ function AppRoutes() {
       <Route path="/protect/modes" element={<ProtectedRoute><AppLayout><SafetyModes /></AppLayout></ProtectedRoute>} />
       <Route path="/protect/tracking" element={<ProtectedRoute skipOnboarding><AppLayout><LiveTracking /></AppLayout></ProtectedRoute>} />
       <Route path="/protect/safe-route" element={<ProtectedRoute skipOnboarding><AppLayout><SafeRoute /></AppLayout></ProtectedRoute>} />
+      <Route path="/maps" element={<ProtectedRoute skipOnboarding><AppLayout><SafetyMap /></AppLayout></ProtectedRoute>} />
       <Route path="/protect/visual-guide" element={<ProtectedRoute><AppLayout><VisualGuide /></AppLayout></ProtectedRoute>} />
       <Route path="/protect/invisible" element={<ProtectedRoute><AppLayout><InvisibleMode /></AppLayout></ProtectedRoute>} />
 

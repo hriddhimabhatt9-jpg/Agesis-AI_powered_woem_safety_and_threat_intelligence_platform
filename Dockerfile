@@ -15,6 +15,13 @@ COPY server/ ./server/
 COPY client/ ./client/
 
 # Build client
+ARG VITE_GOOGLE_MAPS_API_KEY
+ARG VITE_API_URL
+ARG VITE_SOCKET_URL
+ENV VITE_GOOGLE_MAPS_API_KEY=$VITE_GOOGLE_MAPS_API_KEY
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_SOCKET_URL=$VITE_SOCKET_URL
+
 RUN cd client && npm run build
 
 # Set environment variables

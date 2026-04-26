@@ -9,7 +9,7 @@ const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/predict/analyzer', label: 'AI Predict', icon: Brain },
   { path: '/protect/modes', label: 'Protect', icon: Shield },
-  { path: '/protect/tracking', label: 'Map', icon: MapPin },
+  { path: '/maps', label: 'Map', icon: MapPin },
   { path: '/respond/panic', label: 'Alerts', icon: AlertTriangle },
   { path: '/prove/vault', label: 'Evidence', icon: Archive },
   { path: '/recovery/support', label: 'Support', icon: Heart },

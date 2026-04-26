@@ -2,19 +2,19 @@ import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import PageWrapper from '../../components/layout/PageWrapper';
 import { Route, MapPin, Shield, Loader2, Navigation } from 'lucide-react';
-import { GoogleMap, useJsApiLoader, DirectionsService, DirectionsRenderer, Autocomplete } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, DirectionsService, DirectionsRenderer, Autocomplete, Marker } from '@react-google-maps/api';
 
 const libraries = ['places', 'visualization'];
 
-const containerStyle = { width: '100%', height: '300px', borderRadius: '0.75rem', marginBottom: '1.5rem' };
+const containerStyle = { width: '100%', height: '450px', borderRadius: '0.75rem', marginBottom: '1.5rem' };
 const defaultCenter = { lat: 28.6139, lng: 77.2090 }; // Delhi, India
 
 export default function SafeRoute() {
-  const isApiKeyValid = import.meta.env.VITE_GOOGLE_MAPS_API_KEY && import.meta.env.VITE_GOOGLE_MAPS_API_KEY !== 'your-google-maps-api-key';
+  const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
   
-  const { isLoaded } = useJsApiLoader({
+  const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: isApiKeyValid ? import.meta.env.VITE_GOOGLE_MAPS_API_KEY : '',
+    googleMapsApiKey: googleMapsApiKey,
     libraries,
     region: 'IN',
     language: 'en'
@@ -52,7 +52,6 @@ export default function SafeRoute() {
             // Generate route cards based on actual results
             const newRoutes = result.routes.map((route, i) => {
               const leg = route.legs[0];
-              // Simulate safety scores based on index for now, or just provide a high score for the first one
               const safetyScore = i === 0 ? 92 : i === 1 ? 78 : 65;
               const colors = ['emerald', 'amber', 'red'];
               const names = ['Safest Route', 'Alternative Route 1', 'Alternative Route 2'];
@@ -75,7 +74,6 @@ export default function SafeRoute() {
             }
           } else {
             console.error('Directions request failed due to ' + status);
-            // Fallback to mocks if API fails but key was valid
             setRoutes([
               { id: 1, name: 'Safest Route', duration: '25 min', distance: '6.2 km', safetyScore: 92, description: 'Well-lit main roads with CCTV coverage', color: 'emerald' },
               { id: 2, name: 'Balanced Route', duration: '18 min', distance: '4.8 km', safetyScore: 75, description: 'Mix of main and residential roads', color: 'amber' },
@@ -84,7 +82,6 @@ export default function SafeRoute() {
         }
       );
     } else {
-      // Fallback for no google maps loaded
       setTimeout(() => {
         setRoutes([
           { id: 1, name: 'Safest Route', duration: '25 min', distance: '6.2 km', safetyScore: 92, description: 'Well-lit main roads with CCTV coverage', color: 'emerald' },
@@ -125,17 +122,29 @@ export default function SafeRoute() {
 
   const onOriginPlaceChanged = () => {
     if (originAutocomplete !== null) {
-      setOrigin(originAutocomplete.getPlace().formatted_address || originAutocomplete.getPlace().name);
+      const place = originAutocomplete.getPlace();
+      setOrigin(place.formatted_address || place.name);
     }
   };
 
   const onDestPlaceChanged = () => {
     if (destAutocomplete !== null) {
-      setDestination(destAutocomplete.getPlace().formatted_address || destAutocomplete.getPlace().name);
+      const place = destAutocomplete.getPlace();
+      setDestination(place.formatted_address || place.name);
     }
   };
 
   const scoreColor = { emerald: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', amber: 'text-amber-400 bg-amber-500/10 border-amber-500/20', red: 'text-red-400 bg-red-500/10 border-red-500/20' };
+
+  if (loadError) {
+    return (
+      <PageWrapper title="Safe Route Suggestion">
+        <div className="glass-card p-8 text-center text-red-400">
+          <p>Error loading Google Maps. Please check your API key and connection.</p>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper title="Safe Route Suggestion" subtitle="Find the safest path to your destination — prioritizing safety over speed">
@@ -172,27 +181,15 @@ export default function SafeRoute() {
 
         {routes && (
           <div className="space-y-4">
-            {!isApiKeyValid ? (
-              <div className="glass-card p-6 text-center">
-                <MapPin size={32} className="text-red-500 mx-auto mb-2 opacity-50" />
-                <p className="text-surface-300 text-sm">Safe Route Map requires a valid Google Maps API Key.</p>
-                <p className="text-surface-500 text-xs mt-1">Showing theoretical safe routes for India below.</p>
-              </div>
-            ) : isLoaded ? (
+            {isLoaded ? (
               <div className="glass-card p-1">
                 <GoogleMap mapContainerStyle={containerStyle} center={defaultCenter} zoom={13} 
-                  onLoad={(map) => {
-                    // map instance is available here if needed
-                  }}
                   options={{ 
-                    styles: [
-                      { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-                      { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-                      { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-                      { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
-                    ],
-                    disableDefaultUI: true,
-                    zoomControl: true
+                    disableDefaultUI: false,
+                    zoomControl: true,
+                    mapTypeControl: true,
+                    streetViewControl: true,
+                    fullscreenControl: true
                   }}>
                   {directions && <DirectionsRenderer directions={directions} routeIndex={0} options={{ polylineOptions: { strokeColor: '#10b981', strokeWeight: 6, strokeOpacity: 0.8 } }} />}
                   {showSafeZones && safeZones.map((zone, idx) => (

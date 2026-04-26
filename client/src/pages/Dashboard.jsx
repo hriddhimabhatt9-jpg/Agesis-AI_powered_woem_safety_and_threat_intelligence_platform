@@ -2,13 +2,13 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import PageWrapper from '../components/layout/PageWrapper';
-import { Brain, Shield, MapPin, AlertTriangle, Archive, Heart, ChevronRight, Activity, Eye, Zap, TrendingUp } from 'lucide-react';
+import { Brain, Shield, MapPin, AlertTriangle, Archive, Heart, ChevronRight, Activity, Eye, Zap, TrendingUp, Route } from 'lucide-react';
 
 const quickActions = [
   { to: '/predict/analyzer', icon: Brain, label: 'Analyze Message', desc: 'Check a message for threats', color: 'from-violet-500 to-purple-600' },
-  { to: '/protect/tracking', icon: MapPin, label: 'Start Tracking', desc: 'Share your live location', color: 'from-emerald-500 to-teal-500' },
+  { to: '/maps', icon: MapPin, label: 'Safety Map', desc: 'Full interactive safety map', color: 'from-emerald-500 to-teal-500' },
+  { to: '/protect/safe-route', icon: Route, label: 'Safe Route', desc: 'Find the safest path', color: 'from-blue-500 to-indigo-500' },
   { to: '/respond/panic', icon: AlertTriangle, label: 'Panic Button', desc: 'Send emergency alert', color: 'from-red-500 to-orange-500' },
-  { to: '/prove/vault', icon: Archive, label: 'Evidence Vault', desc: 'Store & manage evidence', color: 'from-amber-500 to-yellow-500' },
 ];
 
 const predictTools = [

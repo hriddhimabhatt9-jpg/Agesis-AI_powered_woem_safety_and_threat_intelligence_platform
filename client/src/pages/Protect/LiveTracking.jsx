@@ -8,11 +8,11 @@ const containerStyle = { width: '100%', height: '500px', borderRadius: '0.75rem'
 const defaultCenter = { lat: 28.6139, lng: 77.2090 }; // Delhi, India
 
 export default function LiveTracking() {
-  const isApiKeyValid = import.meta.env.VITE_GOOGLE_MAPS_API_KEY && import.meta.env.VITE_GOOGLE_MAPS_API_KEY !== 'your-google-maps-api-key';
+  const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: isApiKeyValid ? import.meta.env.VITE_GOOGLE_MAPS_API_KEY : '',
+    googleMapsApiKey: googleMapsApiKey,
     libraries: ['places', 'visualization'],
     region: 'IN',
     language: 'en'
@@ -117,21 +117,21 @@ export default function LiveTracking() {
 
   useEffect(() => { getCurrentLocation(); return () => { if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current); }; }, []);
 
+  if (loadError) {
+    return (
+      <PageWrapper title="Live Location Tracking">
+        <div className="glass-card p-8 text-center text-red-400">
+          <p>Error loading Google Maps. Please check your API key and connection.</p>
+        </div>
+      </PageWrapper>
+    );
+  }
+
   return (
     <PageWrapper title="Live Location Tracking" subtitle="Real-time GPS tracking with Google Maps">
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 glass-card p-1 overflow-hidden" style={{ minHeight: '500px' }}>
-          {!isApiKeyValid ? (
-            <div className="flex flex-col items-center justify-center w-full h-full min-h-[500px] text-center p-6">
-              <MapPin size={48} className="text-red-500 mb-4 opacity-50" />
-              <h4 className="text-white font-semibold mb-2">Maps API Key Required</h4>
-              <p className="text-surface-400 text-sm mb-6 max-w-xs">To enable live tracking in India, please provide a valid Google Maps API key in your environment settings.</p>
-              <div className="bg-surface-800 p-4 rounded-lg border border-surface-700 text-left w-full max-w-sm">
-                <p className="text-xs text-primary-400 font-mono mb-1">Status: DEMO_MODE_ACTIVE</p>
-                <p className="text-xs text-surface-400">Centered on: New Delhi, India</p>
-              </div>
-            </div>
-          ) : !isLoaded ? (
+          {!isLoaded ? (
             <div className="flex flex-col items-center justify-center w-full h-full min-h-[500px]">
               <Loader2 size={40} className="animate-spin text-primary-500 mb-4" />
               <p className="text-surface-300">Loading Google Maps...</p>
@@ -139,15 +139,11 @@ export default function LiveTracking() {
           ) : (
             <GoogleMap mapContainerStyle={containerStyle} center={location || defaultCenter} zoom={15} onLoad={onLoad} onUnmount={onUnmount}
               options={{ 
-                styles: [
-                  { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-                  { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-                  { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-                  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
-                  { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
-                ],
-                disableDefaultUI: true,
-                zoomControl: true
+                disableDefaultUI: false,
+                zoomControl: true,
+                mapTypeControl: true,
+                streetViewControl: true,
+                fullscreenControl: true
               }}>
               {location && <Marker position={location} icon={{ path: window.google?.maps?.SymbolPath?.CIRCLE, scale: 8, fillColor: '#7c3aed', fillOpacity: 1, strokeWeight: 2, strokeColor: '#ffffff' }} />}
               {path.length > 1 && <Polyline path={path} options={{ strokeColor: '#7c3aed', strokeOpacity: 0.8, strokeWeight: 4 }} />}
