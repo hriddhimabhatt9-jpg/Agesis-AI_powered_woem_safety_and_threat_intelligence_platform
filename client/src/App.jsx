@@ -93,13 +93,13 @@ function AppRoutes() {
 
       {/* Protect */}
       <Route path="/protect/modes" element={<ProtectedRoute><AppLayout><SafetyModes /></AppLayout></ProtectedRoute>} />
-      <Route path="/protect/tracking" element={<ProtectedRoute><AppLayout><LiveTracking /></AppLayout></ProtectedRoute>} />
-      <Route path="/protect/safe-route" element={<ProtectedRoute><AppLayout><SafeRoute /></AppLayout></ProtectedRoute>} />
+      <Route path="/protect/tracking" element={<ProtectedRoute skipOnboarding><AppLayout><LiveTracking /></AppLayout></ProtectedRoute>} />
+      <Route path="/protect/safe-route" element={<ProtectedRoute skipOnboarding><AppLayout><SafeRoute /></AppLayout></ProtectedRoute>} />
       <Route path="/protect/visual-guide" element={<ProtectedRoute><AppLayout><VisualGuide /></AppLayout></ProtectedRoute>} />
       <Route path="/protect/invisible" element={<ProtectedRoute><AppLayout><InvisibleMode /></AppLayout></ProtectedRoute>} />
 
       {/* Respond */}
-      <Route path="/respond/panic" element={<ProtectedRoute><AppLayout><PanicButton /></AppLayout></ProtectedRoute>} />
+      <Route path="/respond/panic" element={<ProtectedRoute skipOnboarding><AppLayout><PanicButton /></AppLayout></ProtectedRoute>} />
       <Route path="/respond/contacts" element={<ProtectedRoute><AppLayout><TrustedContacts /></AppLayout></ProtectedRoute>} />
       <Route path="/respond/defense" element={<ProtectedRoute><AppLayout><AutoDefense /></AppLayout></ProtectedRoute>} />
 

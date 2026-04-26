@@ -8,9 +8,11 @@ const containerStyle = { width: '100%', height: '500px', borderRadius: '0.75rem'
 const defaultCenter = { lat: 28.6139, lng: 77.2090 }; // Delhi, India
 
 export default function LiveTracking() {
-  const { isLoaded } = useJsApiLoader({
+  const isApiKeyValid = import.meta.env.VITE_GOOGLE_MAPS_API_KEY && import.meta.env.VITE_GOOGLE_MAPS_API_KEY !== 'your-google-maps-api-key';
+
+  const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
+    googleMapsApiKey: isApiKeyValid ? import.meta.env.VITE_GOOGLE_MAPS_API_KEY : '',
   });
 
   const [map, setMap] = useState(null);
@@ -84,7 +86,17 @@ export default function LiveTracking() {
     <PageWrapper title="Live Location Tracking" subtitle="Real-time GPS tracking with Google Maps">
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 glass-card p-1 overflow-hidden" style={{ minHeight: '500px' }}>
-          {!isLoaded ? (
+          {!isApiKeyValid ? (
+            <div className="flex flex-col items-center justify-center w-full h-full min-h-[500px] text-center p-6">
+              <MapPin size={48} className="text-red-500 mb-4 opacity-50" />
+              <h4 className="text-white font-semibold mb-2">Maps API Key Required</h4>
+              <p className="text-surface-400 text-sm mb-6 max-w-xs">To enable live tracking in India, please provide a valid Google Maps API key in your environment settings.</p>
+              <div className="bg-surface-800 p-4 rounded-lg border border-surface-700 text-left w-full max-w-sm">
+                <p className="text-xs text-primary-400 font-mono mb-1">Status: DEMO_MODE_ACTIVE</p>
+                <p className="text-xs text-surface-400">Centered on: New Delhi, India</p>
+              </div>
+            </div>
+          ) : !isLoaded ? (
             <div className="flex flex-col items-center justify-center w-full h-full min-h-[500px]">
               <Loader2 size={40} className="animate-spin text-primary-500 mb-4" />
               <p className="text-surface-300">Loading Google Maps...</p>

@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import { auth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
+import demoStore from '../utils/demoStore.js';
+
 
 const router = Router();
 
@@ -30,8 +32,10 @@ router.put('/profile/step1', auth, [
       return res.json({ user: user.toSafeObject(), message: 'Step 1 completed' });
     } catch {
       // Demo mode
-      Object.assign(req.user, { name, phone, primaryEmergencyContact, onboardingStep: 2 });
-      return res.json({ user: req.user, message: 'Step 1 completed (demo)' });
+      const updated = demoStore.update(req.user._id || req.user.id, { 
+        name, phone, primaryEmergencyContact, onboardingStep: 2 
+      });
+      return res.json({ user: updated || req.user, message: 'Step 1 completed (demo)' });
     }
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -52,8 +56,10 @@ router.put('/profile/step2', auth, async (req, res) => {
       }, { new: true });
       return res.json({ user: user.toSafeObject(), message: 'Profile completed' });
     } catch {
-      Object.assign(req.user, { ageGroup, profession, approximateLocation, additionalEmergencyContacts, profileCompleted: true });
-      return res.json({ user: req.user, message: 'Profile completed (demo)' });
+      const updated = demoStore.update(req.user._id || req.user.id, { 
+        ageGroup, profession, approximateLocation, additionalEmergencyContacts, profileCompleted: true 
+      });
+      return res.json({ user: updated || req.user, message: 'Profile completed (demo)' });
     }
   } catch (error) {
     res.status(500).json({ error: error.message });

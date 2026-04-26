@@ -8,9 +8,11 @@ const containerStyle = { width: '100%', height: '300px', borderRadius: '0.75rem'
 const defaultCenter = { lat: 28.6139, lng: 77.2090 }; // Delhi, India
 
 export default function SafeRoute() {
+  const isApiKeyValid = import.meta.env.VITE_GOOGLE_MAPS_API_KEY && import.meta.env.VITE_GOOGLE_MAPS_API_KEY !== 'your-google-maps-api-key';
+  
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
+    googleMapsApiKey: isApiKeyValid ? import.meta.env.VITE_GOOGLE_MAPS_API_KEY : '',
   });
 
   const [origin, setOrigin] = useState('');
@@ -70,11 +72,21 @@ export default function SafeRoute() {
 
         {routes && (
           <div className="space-y-4">
-            {isLoaded && (
+            {!isApiKeyValid ? (
+              <div className="glass-card p-6 text-center">
+                <MapPin size={32} className="text-red-500 mx-auto mb-2 opacity-50" />
+                <p className="text-surface-300 text-sm">Safe Route Map requires a valid Google Maps API Key.</p>
+                <p className="text-surface-500 text-xs mt-1">Showing theoretical safe routes for India below.</p>
+              </div>
+            ) : isLoaded ? (
               <div className="glass-card p-1">
                 <GoogleMap mapContainerStyle={containerStyle} center={defaultCenter} zoom={13} options={{ styles: [{ elementType: "geometry", stylers: [{ color: "#242f3e" }] },{ elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },{ elementType: "labels.text.fill", stylers: [{ color: "#746855" }] }] }}>
                   {directions && <DirectionsRenderer directions={directions} options={{ polylineOptions: { strokeColor: '#10b981', strokeWeight: 5 } }} />}
                 </GoogleMap>
+              </div>
+            ) : (
+              <div className="flex justify-center p-8">
+                <Loader2 size={24} className="animate-spin text-primary-500" />
               </div>
             )}
             {routes.map((route, i) => (

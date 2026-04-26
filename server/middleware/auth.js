@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
 import config from '../config/index.js';
 import User from '../models/User.js';
+import demoStore from '../utils/demoStore.js';
+
 
 export const auth = async (req, res, next) => {
   try {
@@ -16,8 +18,8 @@ export const auth = async (req, res, next) => {
     try {
       user = await User.findById(decoded.userId);
     } catch (dbErr) {
-      // DB not available — use token data
-      user = { _id: decoded.userId, email: decoded.email, name: decoded.name };
+      // DB not available — try demo store, fallback to decoded token data
+      user = demoStore.getById(decoded.userId) || { _id: decoded.userId, email: decoded.email, name: decoded.name };
     }
 
     if (!user) {

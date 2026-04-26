@@ -6,10 +6,10 @@ import config from '../config/index.js';
 import { validate } from '../middleware/validate.js';
 import { auth } from '../middleware/auth.js';
 
+import demoStore from '../utils/demoStore.js';
+
 const router = Router();
 
-// In-memory store for demo mode (when MongoDB is unavailable)
-const demoUsers = new Map();
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -50,7 +50,7 @@ router.post('/register', [
       });
     } catch (dbErr) {
       // Demo mode
-      if (demoUsers.has(email)) {
+      if (demoStore.has(email)) {
         return res.status(409).json({ error: 'Email already registered' });
       }
 
@@ -67,7 +67,7 @@ router.post('/register', [
         additionalEmergencyContacts: [],
         createdAt: new Date(),
       };
-      demoUsers.set(email, { ...demoUser, password });
+      demoStore.set(email, { ...demoUser, password });
       const token = generateToken(demoUser);
 
       return res.status(201).json({
@@ -109,7 +109,7 @@ router.post('/login', [
       return res.json({ token, user: user.toSafeObject() });
     } catch (dbErr) {
       // Demo mode
-      const demoUser = demoUsers.get(email);
+      const demoUser = demoStore.get(email);
       if (!demoUser || demoUser.password !== password) {
         return res.status(401).json({ error: 'Invalid credentials' });
       }
@@ -161,7 +161,7 @@ router.post('/google', async (req, res) => {
         additionalEmergencyContacts: [],
         createdAt: new Date(),
       };
-      demoUsers.set(email, demoUser);
+      demoStore.set(email, demoUser);
       const token = generateToken(demoUser);
       return res.json({ token, user: demoUser });
     }
