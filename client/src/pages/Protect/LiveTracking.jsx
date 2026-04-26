@@ -24,35 +24,8 @@ export default function LiveTracking() {
   const [path, setPath] = useState([]);
   const [error, setError] = useState('');
   const [speed, setSpeed] = useState(0);
-  const [safeZones, setSafeZones] = useState([]);
   const watchIdRef = useRef(null);
 
-  const findNearbySafeZones = (loc) => {
-    if (!window.google || !loc) return;
-    const service = new window.google.maps.places.PlacesService(document.createElement('div'));
-    
-    // Search for police stations
-    service.nearbySearch({ location: loc, radius: 3000, type: ['police'] }, (results, status) => {
-      if (status === window.google.maps.places.PlacesServiceStatus.OK) {
-        setSafeZones(prev => {
-          const existingIds = new Set(prev.map(p => p.place_id));
-          const newZones = results.filter(r => !existingIds.has(r.place_id)).map(r => ({ ...r, category: 'police' }));
-          return [...prev, ...newZones];
-        });
-      }
-    });
-
-    // Search for hospitals
-    service.nearbySearch({ location: loc, radius: 3000, type: ['hospital'] }, (results, status) => {
-      if (status === window.google.maps.places.PlacesServiceStatus.OK) {
-        setSafeZones(prev => {
-          const existingIds = new Set(prev.map(p => p.place_id));
-          const newZones = results.filter(r => !existingIds.has(r.place_id)).map(r => ({ ...r, category: 'hospital' }));
-          return [...prev, ...newZones];
-        });
-      }
-    });
-  };
 
   const onLoad = useCallback(function callback(map) { setMap(map); }, []);
   const onUnmount = useCallback(function callback(map) { setMap(null); }, []);
@@ -66,7 +39,6 @@ export default function LiveTracking() {
         setLocation(loc);
         setSpeed(pos.coords.speed || 0);
         if (map) map.panTo(loc);
-        findNearbySafeZones(loc);
       },
       (err) => {
         console.warn('Geolocation Error:', err);
@@ -92,9 +64,6 @@ export default function LiveTracking() {
         setSpeed(pos.coords.speed || 0);
         setPath(prev => [...prev, loc]);
         if (map) map.panTo(loc);
-        
-        // Update safe zones every few points to save API calls
-        if (path.length % 5 === 0) findNearbySafeZones(loc);
       },
       (err) => {
         console.warn('Tracking Error:', err);
@@ -120,7 +89,7 @@ export default function LiveTracking() {
   if (loadError) {
     return (
       <PageWrapper title="Live Location Tracking">
-        <div className="glass-card p-8 text-center text-red-400">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center text-red-500">
           <p>Error loading Google Maps. Please check your API key and connection.</p>
         </div>
       </PageWrapper>
@@ -129,12 +98,12 @@ export default function LiveTracking() {
 
   return (
     <PageWrapper title="Live Location Tracking" subtitle="Real-time GPS tracking with Google Maps">
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 glass-card p-1 overflow-hidden" style={{ minHeight: '500px' }}>
+      <div className="grid lg:grid-cols-3 gap-6 text-gray-800">
+        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-200 p-1 overflow-hidden" style={{ minHeight: '500px' }}>
           {!isLoaded ? (
             <div className="flex flex-col items-center justify-center w-full h-full min-h-[500px]">
-              <Loader2 size={40} className="animate-spin text-primary-500 mb-4" />
-              <p className="text-surface-300">Loading Google Maps...</p>
+              <Loader2 size={40} className="animate-spin text-blue-500 mb-4" />
+              <p className="text-gray-500">Loading Google Maps...</p>
             </div>
           ) : (
             <GoogleMap mapContainerStyle={containerStyle} center={location || defaultCenter} zoom={15} onLoad={onLoad} onUnmount={onUnmount}
@@ -147,40 +116,33 @@ export default function LiveTracking() {
               }}>
               {location && <Marker position={location} icon={{ path: window.google?.maps?.SymbolPath?.CIRCLE, scale: 8, fillColor: '#7c3aed', fillOpacity: 1, strokeWeight: 2, strokeColor: '#ffffff' }} />}
               {path.length > 1 && <Polyline path={path} options={{ strokeColor: '#7c3aed', strokeOpacity: 0.8, strokeWeight: 4 }} />}
-              {safeZones.map((zone, idx) => (
-                <Marker key={idx} position={zone.geometry.location} title={zone.name}
-                  icon={{
-                    url: zone.category === 'police' ? 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png' : 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
-                    scaledSize: new window.google.maps.Size(24, 24)
-                  }}
-                />
-              ))}
+
             </GoogleMap>
           )}
         </div>
 
         <div className="space-y-4">
-          <div className="glass-card p-5">
-            <h3 className="text-white font-semibold mb-4 flex items-center gap-2"><Navigation size={18} className="text-primary-400" /> Controls</h3>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+            <h3 className="text-gray-900 font-semibold mb-4 flex items-center gap-2"><Navigation size={18} className="text-blue-500" /> Controls</h3>
             <div className="space-y-3">
-              <button onClick={getCurrentLocation} className="btn-secondary w-full flex items-center justify-center gap-2 text-sm"><Locate size={16} /> Get My Location</button>
-              <button onClick={toggleTracking} className={`w-full flex items-center justify-center gap-2 text-sm py-3 rounded-xl font-semibold transition-all ${tracking ? 'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20' : 'btn-primary shadow-lg shadow-primary-500/20'}`}>{tracking ? '⏹ Stop Tracking' : '▶ Start Live Tracking'}</button>
-              <button onClick={shareLocation} disabled={!location} className="btn-secondary w-full flex items-center justify-center gap-2 text-sm"><Share2 size={16} /> Share Location</button>
-              <button onClick={() => location && window.open(`https://www.google.com/maps/dir/?api=1&destination=${location.lat},${location.lng}`, '_blank')} className="btn-secondary w-full flex items-center justify-center gap-2 text-sm border-emerald-500/20 text-emerald-400"><Navigation size={16} /> Open in Native Maps</button>
+              <button onClick={getCurrentLocation} className="w-full px-4 py-3 bg-gray-50 text-gray-700 hover:bg-gray-100 hover:text-gray-900 border border-gray-200 font-semibold rounded-xl transition-all flex items-center justify-center gap-2 text-sm"><Locate size={16} /> Get My Location</button>
+              <button onClick={toggleTracking} className={`w-full flex items-center justify-center gap-2 text-sm py-3 rounded-xl font-semibold transition-all ${tracking ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20'}`}>{tracking ? '⏹ Stop Tracking' : '▶ Start Live Tracking'}</button>
+              <button onClick={shareLocation} disabled={!location} className="w-full px-4 py-3 bg-gray-50 text-gray-700 hover:bg-gray-100 hover:text-gray-900 border border-gray-200 font-semibold rounded-xl transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"><Share2 size={16} /> Share Location</button>
+              <button onClick={() => location && window.open(`https://www.google.com/maps/dir/?api=1&destination=${location.lat},${location.lng}`, '_blank')} className="w-full px-4 py-3 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 font-semibold rounded-xl transition-all flex items-center justify-center gap-2 text-sm"><Navigation size={16} /> Open in Native Maps</button>
             </div>
           </div>
 
-          {error && <div className="glass-card p-4 border-red-500/20"><p className="text-red-400 text-xs">{error}</p></div>}
+          {error && <div className="bg-red-50 rounded-2xl border border-red-200 p-4"><p className="text-red-600 text-xs">{error}</p></div>}
 
           {location && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card p-5">
-              <h3 className="text-white font-semibold mb-3 text-sm">Current Location</h3>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+              <h3 className="text-gray-900 font-semibold mb-3 text-sm">Current Location</h3>
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-surface-400">Latitude</span><span className="text-white font-mono">{location.lat.toFixed(6)}</span></div>
-                <div className="flex justify-between"><span className="text-surface-400">Longitude</span><span className="text-white font-mono">{location.lng.toFixed(6)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Latitude</span><span className="text-gray-900 font-mono">{location.lat.toFixed(6)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Longitude</span><span className="text-gray-900 font-mono">{location.lng.toFixed(6)}</span></div>
                 {tracking && <>
-                  <div className="flex justify-between"><span className="text-surface-400">Points</span><span className="text-primary-400 font-bold">{path.length}</span></div>
-                  <div className="flex justify-between"><span className="text-surface-400">Speed</span><span className="text-white">{(speed * 3.6).toFixed(1)} km/h</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Points</span><span className="text-blue-600 font-bold">{path.length}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Speed</span><span className="text-gray-900">{(speed * 3.6).toFixed(1)} km/h</span></div>
                 </>}
               </div>
             </motion.div>

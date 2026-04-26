@@ -28,14 +28,21 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: config.clientUrl, methods: ['GET', 'POST'], credentials: true },
+  cors: { 
+    origin: config.nodeEnv === 'production' ? config.clientUrl : [config.clientUrl, 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'], 
+    methods: ['GET', 'POST'], 
+    credentials: true 
+  },
 });
 
 // Connect to MongoDB
 connectDB();
 
 // Middleware
-app.use(cors({ origin: config.clientUrl, credentials: true }));
+app.use(cors({ 
+  origin: config.nodeEnv === 'production' ? config.clientUrl : [config.clientUrl, 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'], 
+  credentials: true 
+}));
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' }, contentSecurityPolicy: false }));
 app.use(compression());
 app.use(morgan('dev'));

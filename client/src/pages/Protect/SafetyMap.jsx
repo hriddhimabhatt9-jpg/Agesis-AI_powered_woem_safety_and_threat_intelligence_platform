@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, Navigation, Search, Layers, Shield, Hospital, Building2, Locate, Share2, Route, X, Loader2, Clock, ZoomIn, ZoomOut, ExternalLink, Navigation2, Crosshair, Menu, ArrowLeft, MoreVertical, ChevronDown } from 'lucide-react';
+import { MapPin, Navigation, Search, Layers, Shield, Hospital, Building2, Locate, Share2, Route, X, Loader2, Clock, ZoomIn, ZoomOut, ExternalLink, Navigation2, Crosshair, Menu, ArrowLeft, MoreVertical, ChevronDown, Square } from 'lucide-react';
 
 const defaultCenter = [28.6139, 77.2090];
 
@@ -134,6 +134,13 @@ export default function SafetyMap() {
   const [nearbyPlaces, setNearbyPlaces] = useState([]);
   const [loadingPlaces, setLoadingPlaces] = useState(false);
 
+  // Live Tracking
+  const [tracking, setTracking] = useState(false);
+  const [path, setPath] = useState([]);
+  const watchIdRef = useRef(null);
+  const [speed, setSpeed] = useState(0);
+  const [trackingError, setTrackingError] = useState('');
+
   // Get user location
   useEffect(() => {
     if (!navigator.geolocation) return;
@@ -146,6 +153,49 @@ export default function SafetyMap() {
       }, () => {}, { enableHighAccuracy: true, timeout: 8000 }
     );
   }, []);
+
+  useEffect(() => {
+    return () => { if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current); };
+  }, []);
+
+  const toggleTracking = () => {
+    if (tracking) {
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+      setTracking(false);
+      setSpeed(0);
+      setTrackingError('');
+    } else {
+      if (!navigator.geolocation) {
+        alert("Geolocation is not supported by your browser");
+        return;
+      }
+      setTracking(true);
+      setTrackingError('');
+      setPath(userLoc ? [userLoc] : []);
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          const loc = [pos.coords.latitude, pos.coords.longitude];
+          setUserLoc(loc);
+          setCenter(loc);
+          setSpeed(pos.coords.speed || 0);
+          setPath(prev => {
+             if (prev.length > 0) {
+                const last = prev[prev.length - 1];
+                if (last[0] === loc[0] && last[1] === loc[1]) return prev;
+             }
+             return [...prev, loc];
+          });
+          setTrackingError('');
+        },
+        (err) => {
+          console.warn('Tracking error:', err);
+          setTrackingError('Location signal lost or timed out.');
+        },
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 30000 }
+      );
+    }
+  };
 
   const goToMyLocation = () => {
     if (!navigator.geolocation) return;
@@ -281,194 +331,10 @@ export default function SafetyMap() {
   const tile = TILE_LAYERS[tileKey];
 
   return (
-    <div className="fixed inset-0 pt-14 lg:pt-0 bg-gray-100 flex flex-col md:flex-row text-gray-800">
+    <div className="fixed inset-0 pt-14 lg:pt-0 bg-gray-100 flex text-gray-800">
       
-      {/* Left Panel - Google Maps Style */}
-      <div className={`absolute md:relative z-[1001] md:z-10 w-full md:w-[400px] h-[calc(100vh-3.5rem)] md:h-screen bg-white shadow-[2px_0_8px_rgba(0,0,0,0.15)] flex flex-col transition-transform duration-300 ${activePanel === 'search' && !searchQuery ? 'pointer-events-none md:pointer-events-auto bg-transparent md:bg-white shadow-none md:shadow-[2px_0_8px_rgba(0,0,0,0.15)]' : ''}`}>
-        
-        {/* Search Panel */}
-        {activePanel === 'search' && (
-          <div className="p-2 md:p-0 flex-1 flex flex-col pointer-events-auto">
-            <div className="bg-white rounded-lg md:rounded-none shadow-md md:shadow-none border border-gray-200 md:border-0 md:border-b m-2 md:m-0 flex items-center h-12 px-3 overflow-hidden">
-              <Menu size={20} className="text-gray-500 hover:text-gray-800 cursor-pointer shrink-0" />
-              <input 
-                value={searchQuery} 
-                onChange={e => {
-                  setSearchQuery(e.target.value);
-                  if(e.target.value.length > 2) doSearch(e.target.value);
-                  else setShowResults(false);
-                }}
-                onFocus={() => { if(searchQuery.length > 2) setShowResults(true); }}
-                onKeyDown={e => e.key === 'Enter' && doSearch()}
-                className="flex-1 bg-transparent border-none outline-none px-3 text-base text-gray-800 placeholder-gray-500 w-full" 
-                placeholder="Search AEGESIS Maps" 
-              />
-              {searchQuery && <X size={18} className="text-gray-400 hover:text-gray-600 cursor-pointer mr-2" onClick={() => {setSearchQuery(''); setShowResults(false);}} />}
-              <div className="w-px h-6 bg-gray-300 mx-2"></div>
-              <button onClick={() => doSearch()} className="text-blue-500 hover:text-blue-600 shrink-0">
-                {searching ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
-              </button>
-              <button onClick={openDirections} className="ml-3 w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 shrink-0">
-                <Route size={18} />
-              </button>
-            </div>
-
-            {/* Quick action pills - visible when not searching */}
-            {!showResults && !searchQuery && (
-              <div className="flex gap-2 px-4 py-2 overflow-x-auto no-scrollbar border-b border-gray-100 bg-white">
-                {PLACE_CATEGORIES.map(cat => {
-                  const active = activeCategories.includes(cat.key);
-                  return (
-                    <button key={cat.key} onClick={() => toggleCategory(cat.key)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all border shadow-sm ${active ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:shadow-md'}`}>
-                      <cat.icon size={14} style={{ color: active ? '#1d4ed8' : cat.color }} />
-                      {cat.label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Search Results Dropdown */}
-            {showResults && searchResults.length > 0 && (
-              <div className="flex-1 overflow-y-auto bg-white m-2 md:m-0 rounded-lg md:rounded-none shadow-md md:shadow-none">
-                {searchResults.map((r, i) => (
-                  <button key={i} onClick={() => selectResult(r)}
-                    className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-all border-b border-gray-100 flex items-start gap-3">
-                    <MapPin size={20} className="text-gray-400 mt-0.5 shrink-0" />
-                    <div className="overflow-hidden">
-                      <p className="text-gray-800 text-sm font-medium truncate">{r.display_name?.split(',')[0]}</p>
-                      <p className="text-gray-500 text-xs truncate mt-0.5">{r.display_name}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Place Details Panel */}
-        {activePanel === 'details' && searchMarker && (
-          <div className="bg-white flex-1 flex flex-col pointer-events-auto h-full">
-            {/* Header Image placeholder (Google maps style) */}
-            <div className="h-48 bg-gray-200 relative w-full overflow-hidden shrink-0">
-               <img src={`https://maps.googleapis.com/maps/api/streetview?size=400x200&location=${searchMarker.pos[0]},${searchMarker.pos[1]}&key=DEMO`} onError={(e) => { e.target.onerror = null; e.target.src = 'https://images.unsplash.com/photo-1524661135-423995f22d0b?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80'; }} className="w-full h-full object-cover" alt="Location" />
-               <button onClick={closeDetails} className="absolute top-3 left-3 w-8 h-8 bg-white/90 backdrop-blur rounded-full flex items-center justify-center text-gray-700 hover:bg-white shadow-md z-10">
-                 <ArrowLeft size={18} />
-               </button>
-            </div>
-            
-            <div className="p-5 border-b border-gray-200 shrink-0">
-              <h1 className="text-2xl font-normal text-gray-900 mb-1">{searchMarker.name}</h1>
-              <p className="text-sm text-gray-600 mb-4">{searchMarker.fullAddress}</p>
-              
-              <div className="flex justify-around mt-4">
-                <button onClick={openDirections} className="flex flex-col items-center gap-1 group">
-                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center group-hover:bg-blue-700 transition-colors">
-                    <Route size={20} />
-                  </div>
-                  <span className="text-xs font-medium text-blue-600">Directions</span>
-                </button>
-                <button onClick={() => {}} className="flex flex-col items-center gap-1 group">
-                  <div className="w-10 h-10 rounded-full border border-gray-300 text-gray-700 flex items-center justify-center group-hover:bg-gray-100 transition-colors">
-                    <Locate size={18} />
-                  </div>
-                  <span className="text-xs font-medium text-gray-700">Save</span>
-                </button>
-                <button onClick={shareLocation} className="flex flex-col items-center gap-1 group">
-                  <div className="w-10 h-10 rounded-full border border-gray-300 text-gray-700 flex items-center justify-center group-hover:bg-gray-100 transition-colors">
-                    <Share2 size={18} />
-                  </div>
-                  <span className="text-xs font-medium text-gray-700">Share</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="p-0 overflow-y-auto flex-1">
-              <a href={`https://www.google.com/maps/dir/?api=1&destination=${searchMarker.pos[0]},${searchMarker.pos[1]}`} target="_blank" rel="noreferrer" className="flex items-center gap-4 px-5 py-4 border-b border-gray-100 hover:bg-gray-50">
-                <ExternalLink size={20} className="text-gray-400" />
-                <span className="text-sm text-gray-700">Open in official Google Maps</span>
-              </a>
-              <div className="flex items-center gap-4 px-5 py-4 border-b border-gray-100">
-                <MapPin size={20} className="text-gray-400" />
-                <span className="text-sm text-gray-700">{searchMarker.pos[0].toFixed(5)}, {searchMarker.pos[1].toFixed(5)}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Directions Panel */}
-        {activePanel === 'directions' && (
-          <div className="bg-white flex-1 flex flex-col pointer-events-auto h-full shadow-xl z-20">
-            {/* Header (Blue) */}
-            <div className="bg-blue-600 text-white p-4 shrink-0 shadow-md z-10">
-              <div className="flex items-center gap-4 mb-4">
-                <button onClick={closeDirections} className="hover:bg-blue-700 p-1.5 rounded-full transition-colors">
-                  <ArrowLeft size={20} />
-                </button>
-                <div className="flex gap-4">
-                  {[{ key: 'driving', icon: '🚗' }, { key: 'walking', icon: '🚶' }, { key: 'cycling', icon: '🚲' }].map(m => (
-                    <button key={m.key} onClick={() => {setTravelMode(m.key); setTimeout(getDirections, 100);}}
-                      className={`p-2 rounded-full transition-all ${travelMode === m.key ? 'bg-blue-800 shadow-inner' : 'hover:bg-blue-500'}`}>
-                      <span className="text-lg">{m.icon}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-3 relative">
-                <div className="flex flex-col items-center justify-center gap-1 mt-2">
-                  <div className="w-2 h-2 rounded-full border-2 border-white"></div>
-                  <div className="w-0.5 h-6 bg-blue-400 border-dotted border-l-2"></div>
-                  <div className="w-2 h-2 bg-red-500"></div>
-                </div>
-                <div className="flex-1 space-y-2">
-                  <input value={originText} onChange={e => setOriginText(e.target.value)} onKeyDown={e => e.key === 'Enter' && getDirections()} className="w-full bg-blue-700 text-white placeholder-blue-300 border-none outline-none px-3 py-1.5 rounded text-sm focus:bg-white focus:text-gray-900 transition-colors" placeholder="Choose starting point" />
-                  <input value={destText} onChange={e => setDestText(e.target.value)} onKeyDown={e => e.key === 'Enter' && getDirections()} className="w-full bg-blue-700 text-white placeholder-blue-300 border-none outline-none px-3 py-1.5 rounded text-sm focus:bg-white focus:text-gray-900 transition-colors" placeholder="Choose destination" />
-                </div>
-                <button className="self-center p-2 hover:bg-blue-700 rounded-full text-white">
-                  <MoreVertical size={20} />
-                </button>
-              </div>
-            </div>
-
-            {/* Route Options / Steps */}
-            <div className="flex-1 bg-gray-50 overflow-y-auto">
-              {routeLoading ? (
-                <div className="p-8 flex flex-col items-center justify-center text-gray-500 gap-3">
-                  <Loader2 size={24} className="animate-spin text-blue-500" />
-                  <p className="text-sm">Finding best route...</p>
-                </div>
-              ) : routeInfo ? (
-                <div>
-                  <div className="bg-white p-4 border-b border-gray-200">
-                    <h2 className="text-2xl font-medium text-green-700">{routeInfo.duration}</h2>
-                    <p className="text-sm text-gray-500">{routeInfo.distance}</p>
-                    <p className="text-sm text-gray-600 mt-2">Fastest route now due to traffic conditions.</p>
-                  </div>
-                  
-                  <div className="p-4 space-y-4">
-                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Step-by-step</h3>
-                    {routeInfo.steps?.map((step, idx) => (
-                      <div key={idx} className="flex gap-3 border-b border-gray-100 pb-4 last:border-0">
-                        <Navigation2 size={18} className="text-gray-400 mt-0.5 shrink-0" />
-                        <p className="text-sm text-gray-700" dangerouslySetInnerHTML={{__html: step}}></p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="p-8 text-center text-gray-500 text-sm">
-                  Enter an origin and destination to see route.
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* Map Area */}
-      <div className="flex-1 relative z-0 h-[calc(100vh-3.5rem)] md:h-screen w-full">
+      <div className="flex-1 absolute inset-0 z-0 h-[calc(100vh-3.5rem)] md:h-screen w-full">
         <MapContainer center={center} zoom={14} style={{ width: '100%', height: '100%' }} zoomControl={false} ref={mapRef}>
           <TileLayer url={tile.url} attribution={tile.attr} />
           <RecenterMap center={center} />
@@ -494,48 +360,43 @@ export default function SafetyMap() {
           {routeCoords.length > 0 && <Polyline positions={routeCoords} pathOptions={{ color: '#4285F4', weight: 6, opacity: 0.8 }} />}
           {routeCoords.length > 0 && <Polyline positions={routeCoords} pathOptions={{ color: '#1a73e8', weight: 2, opacity: 1 }} />}
 
-          {/* Nearby places */}
-          {nearbyPlaces.map(place => {
-            const cat = PLACE_CATEGORIES.find(c => c.key === place.category);
-            return (
-              <Marker key={place.id} position={[place.lat, place.lng]} icon={makeIcon(cat?.leafletColor || 'blue')}>
-                <Popup className="google-popup">
-                  <div className="font-medium text-sm mb-1">{place.name}</div>
-                  {place.addr && <div className="text-xs text-gray-600 mb-1">{place.addr}</div>}
-                  {place.phone && <div className="text-xs text-blue-600 mb-1">📞 {place.phone}</div>}
-                  {place.opening && <div className="text-xs text-green-600 mb-2">🕐 {place.opening}</div>}
-                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`} target="_blank" rel="noreferrer"
-                    className="inline-block px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-medium no-underline hover:bg-blue-700 transition-colors">
-                    Directions
-                  </a>
-                </Popup>
-              </Marker>
-            );
-          })}
+          {/* Tracking Path */}
+          {tracking && path.length > 1 && <Polyline positions={path} pathOptions={{ color: '#7c3aed', weight: 4, opacity: 0.8 }} />}
+
         </MapContainer>
 
-        {/* Floating Quick Action Pills (visible on mobile only when search panel is not active) */}
-        <div className="md:hidden absolute top-4 left-4 right-14 z-[1000] overflow-x-auto no-scrollbar pointer-events-none">
-          {activePanel === 'search' && !searchQuery && (
-             <div className="flex gap-2 pointer-events-auto">
-               {PLACE_CATEGORIES.map(cat => {
-                 const active = activeCategories.includes(cat.key);
-                 return (
-                   <button key={cat.key} onClick={() => toggleCategory(cat.key)}
-                     className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all shadow-md border ${active ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-200 text-gray-700'}`}>
-                     <cat.icon size={14} style={{ color: active ? '#1d4ed8' : cat.color }} />
-                     {cat.label}
-                   </button>
-                 );
-               })}
-             </div>
-          )}
-        </div>
+        {/* Live Tracking Info Panel */}
+        {tracking && (
+          <div className="absolute top-20 right-4 z-[2000] bg-white rounded-xl shadow-lg border border-red-200 p-4 pointer-events-auto flex flex-col gap-2 w-48">
+            <div className="flex items-center gap-2 text-red-600 font-bold mb-1">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse"></div>
+              Live Tracking
+            </div>
+            {trackingError ? (
+              <div className="text-xs text-red-500 font-medium">{trackingError}</div>
+            ) : (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Speed:</span>
+                  <span className="text-gray-900 font-medium">{(speed * 3.6).toFixed(1)} km/h</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Points:</span>
+                  <span className="text-gray-900 font-medium">{path.length}</span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
-        {/* Bottom Right Controls (Google Maps style) */}
-        <div className="absolute bottom-6 right-4 flex flex-col gap-3 z-[1000]">
+        {/* Bottom Right Controls */}
+        <div className="absolute bottom-6 right-4 flex flex-col gap-3 z-[1000] pointer-events-auto">
           
-          <button onClick={goToMyLocation} className="w-10 h-10 rounded-full bg-white shadow-md border border-gray-200 flex items-center justify-center text-gray-600 hover:text-blue-600 hover:bg-gray-50 transition-colors">
+          <button onClick={toggleTracking} className={`w-10 h-10 rounded-full shadow-md border flex items-center justify-center transition-colors ${tracking ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' : 'bg-white border-gray-200 text-blue-600 hover:bg-blue-50'}`} title={tracking ? "Stop Live Tracking" : "Start Live Tracking"}>
+            {tracking ? <Square size={16} /> : <Crosshair size={18} />}
+          </button>
+
+          <button onClick={goToMyLocation} className="w-10 h-10 rounded-full bg-white shadow-md border border-gray-200 flex items-center justify-center text-gray-600 hover:text-blue-600 hover:bg-gray-50 transition-colors" title="My Location">
             <Locate size={18} />
           </button>
           
@@ -568,6 +429,174 @@ export default function SafetyMap() {
               ))}
             </div>
           </div>
+        </div>
+
+        {/* Floating Panel on the left */}
+        <div className="absolute top-20 md:top-6 left-4 md:left-6 z-[2000] w-[calc(100%-2rem)] md:w-[400px] flex flex-col gap-2 pointer-events-none">
+          
+          {/* Search Panel */}
+          {activePanel === 'search' && (
+            <div className="flex flex-col w-full">
+              <div className="bg-white rounded-xl shadow-lg border border-gray-200 flex items-center h-14 px-4 overflow-hidden pointer-events-auto">
+                <Menu size={20} className="text-gray-500 hover:text-gray-800 cursor-pointer shrink-0" />
+                <input 
+                  value={searchQuery} 
+                  onChange={e => {
+                    setSearchQuery(e.target.value);
+                    if(e.target.value.length > 2) doSearch(e.target.value);
+                    else setShowResults(false);
+                  }}
+                  onFocus={() => { if(searchQuery.length > 2) setShowResults(true); }}
+                  onKeyDown={e => e.key === 'Enter' && doSearch()}
+                  className="flex-1 bg-transparent border-none outline-none px-3 text-base text-gray-800 placeholder-gray-500 w-full" 
+                  placeholder="Search AEGESIS Maps" 
+                />
+                {searchQuery && <X size={18} className="text-gray-400 hover:text-gray-600 cursor-pointer mr-2" onClick={() => {setSearchQuery(''); setShowResults(false);}} />}
+                <div className="w-px h-6 bg-gray-300 mx-2"></div>
+                <button onClick={() => doSearch()} className="text-blue-500 hover:text-blue-600 shrink-0">
+                  {searching ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
+                </button>
+                <button onClick={openDirections} className="ml-3 w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 shrink-0">
+                  <Route size={18} />
+                </button>
+              </div>
+
+              {/* Search Results Dropdown */}
+              {showResults && searchResults.length > 0 && (
+                <div className="mt-2 w-full overflow-y-auto bg-white rounded-xl shadow-lg border border-gray-200 max-h-[60vh] pointer-events-auto">
+                  {searchResults.map((r, i) => (
+                    <button key={i} onClick={() => selectResult(r)}
+                      className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-all border-b border-gray-100 flex items-start gap-3">
+                      <MapPin size={20} className="text-gray-400 mt-0.5 shrink-0" />
+                      <div className="overflow-hidden">
+                        <p className="text-gray-800 text-sm font-medium truncate">{r.display_name?.split(',')[0]}</p>
+                        <p className="text-gray-500 text-xs truncate mt-0.5">{r.display_name}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Place Details Panel */}
+          {activePanel === 'details' && searchMarker && (
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 flex flex-col pointer-events-auto overflow-hidden">
+              {/* Simple Top Bar with Back Button */}
+              <div className="p-3 border-b border-gray-200 shrink-0 bg-white flex items-center gap-3 shadow-sm z-10 relative">
+                 <button onClick={closeDetails} className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-gray-700 hover:bg-gray-100 transition-colors shrink-0">
+                   <ArrowLeft size={18} />
+                 </button>
+                 <span className="font-medium text-gray-700">Back to search</span>
+              </div>
+              
+              <div className="p-5 border-b border-gray-200 shrink-0">
+                <h1 className="text-2xl font-normal text-gray-900 mb-1">{searchMarker.name}</h1>
+                <p className="text-sm text-gray-600 mb-4">{searchMarker.fullAddress}</p>
+                
+                <div className="flex justify-around mt-4">
+                  <button onClick={openDirections} className="flex flex-col items-center gap-1 group">
+                    <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center group-hover:bg-blue-700 transition-colors shadow-sm">
+                      <Route size={20} />
+                    </div>
+                    <span className="text-xs font-medium text-blue-600 mt-1">Directions</span>
+                  </button>
+                  <button onClick={() => {}} className="flex flex-col items-center gap-1 group">
+                    <div className="w-10 h-10 rounded-full border border-gray-300 text-gray-700 flex items-center justify-center group-hover:bg-gray-50 transition-colors shadow-sm">
+                      <Locate size={18} />
+                    </div>
+                    <span className="text-xs font-medium text-gray-700 mt-1">Save</span>
+                  </button>
+                  <button onClick={shareLocation} className="flex flex-col items-center gap-1 group">
+                    <div className="w-10 h-10 rounded-full border border-gray-300 text-gray-700 flex items-center justify-center group-hover:bg-gray-50 transition-colors shadow-sm">
+                      <Share2 size={18} />
+                    </div>
+                    <span className="text-xs font-medium text-gray-700 mt-1">Share</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-0 overflow-y-auto flex-1">
+                <a href={`https://www.google.com/maps/dir/?api=1&destination=${searchMarker.pos[0]},${searchMarker.pos[1]}`} target="_blank" rel="noreferrer" className="flex items-center gap-4 px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                  <ExternalLink size={20} className="text-blue-500" />
+                  <span className="text-sm font-medium text-blue-600">Open in official Google Maps</span>
+                </a>
+                <div className="flex items-center gap-4 px-5 py-4 border-b border-gray-100">
+                  <MapPin size={20} className="text-gray-400" />
+                  <span className="text-sm text-gray-700">{searchMarker.pos[0].toFixed(5)}, {searchMarker.pos[1].toFixed(5)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Directions Panel */}
+          {activePanel === 'directions' && (
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 flex flex-col pointer-events-auto overflow-hidden">
+              {/* Header (Blue) */}
+              <div className="bg-blue-600 text-white p-4 shrink-0 shadow-md z-10">
+                <div className="flex items-center gap-4 mb-4">
+                  <button onClick={closeDirections} className="hover:bg-blue-700 p-1.5 rounded-full transition-colors">
+                    <ArrowLeft size={20} />
+                  </button>
+                  <div className="flex gap-4">
+                    {[{ key: 'driving', icon: '🚗' }, { key: 'walking', icon: '🚶' }, { key: 'cycling', icon: '🚲' }].map(m => (
+                      <button key={m.key} onClick={() => {setTravelMode(m.key); setTimeout(getDirections, 100);}}
+                        className={`p-2 rounded-full transition-all ${travelMode === m.key ? 'bg-blue-800 shadow-inner' : 'hover:bg-blue-500'}`}>
+                        <span className="text-lg">{m.icon}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-3 relative">
+                  <div className="flex flex-col items-center justify-center gap-1 mt-2">
+                    <div className="w-2 h-2 rounded-full border-2 border-white"></div>
+                    <div className="w-0.5 h-6 bg-blue-400 border-dotted border-l-2"></div>
+                    <div className="w-2 h-2 bg-red-500"></div>
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <input value={originText} onChange={e => setOriginText(e.target.value)} onKeyDown={e => e.key === 'Enter' && getDirections()} className="w-full bg-blue-700 text-white placeholder-blue-300 border-none outline-none px-3 py-1.5 rounded text-sm focus:bg-white focus:text-gray-900 transition-colors" placeholder="Choose starting point" />
+                    <input value={destText} onChange={e => setDestText(e.target.value)} onKeyDown={e => e.key === 'Enter' && getDirections()} className="w-full bg-blue-700 text-white placeholder-blue-300 border-none outline-none px-3 py-1.5 rounded text-sm focus:bg-white focus:text-gray-900 transition-colors" placeholder="Choose destination" />
+                  </div>
+                  <button className="self-center p-2 hover:bg-blue-700 rounded-full text-white">
+                    <MoreVertical size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Route Options / Steps */}
+              <div className="bg-gray-50 overflow-y-auto max-h-[60vh]">
+                {routeLoading ? (
+                  <div className="p-8 flex flex-col items-center justify-center text-gray-500 gap-3">
+                    <Loader2 size={24} className="animate-spin text-blue-500" />
+                    <p className="text-sm">Finding best route...</p>
+                  </div>
+                ) : routeInfo ? (
+                  <div>
+                    <div className="bg-white p-4 border-b border-gray-200">
+                      <h2 className="text-2xl font-medium text-green-700">{routeInfo.duration}</h2>
+                      <p className="text-sm text-gray-500">{routeInfo.distance}</p>
+                      <p className="text-sm text-gray-600 mt-2">Fastest route now due to traffic conditions.</p>
+                    </div>
+                    
+                    <div className="p-4 space-y-4">
+                      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Step-by-step</h3>
+                      {routeInfo.steps?.map((step, idx) => (
+                        <div key={idx} className="flex gap-3 border-b border-gray-100 pb-4 last:border-0">
+                          <Navigation2 size={18} className="text-gray-400 mt-0.5 shrink-0" />
+                          <p className="text-sm text-gray-700" dangerouslySetInnerHTML={{__html: step}}></p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-gray-500 text-sm">
+                    Enter an origin and destination to see route.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
       
