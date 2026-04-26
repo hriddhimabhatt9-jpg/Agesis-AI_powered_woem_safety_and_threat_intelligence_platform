@@ -1,17 +1,17 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, Navigation, Search, Layers, Shield, Hospital, Building2, Locate, Share2, Route, X, Loader2, Clock, ZoomIn, ZoomOut, ExternalLink, Navigation2, Crosshair } from 'lucide-react';
+import { MapPin, Navigation, Search, Layers, Shield, Hospital, Building2, Locate, Share2, Route, X, Loader2, Clock, ZoomIn, ZoomOut, ExternalLink, Navigation2, Crosshair, Menu, ArrowLeft, MoreVertical, ChevronDown } from 'lucide-react';
 
 const defaultCenter = [28.6139, 77.2090];
 
 const TILE_LAYERS = {
-  dark: { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attr: '&copy; CartoDB' },
   street: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap' },
   satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: '&copy; Esri' },
   topo: { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attr: '&copy; OpenTopoMap' },
+  dark: { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attr: '&copy; CartoDB' },
 };
 
 // Fix default leaflet marker icons
@@ -29,15 +29,20 @@ const makeIcon = (color) => new L.Icon({
 });
 
 const userIcon = new L.DivIcon({
-  html: '<div style="width:20px;height:20px;border-radius:50%;background:#7c3aed;border:3px solid white;box-shadow:0 0 12px rgba(124,58,237,0.6)"></div>',
+  html: '<div style="width:20px;height:20px;border-radius:50%;background:#4285F4;border:3px solid white;box-shadow:0 0 12px rgba(66,133,244,0.6)"></div>',
   iconSize: [20, 20], iconAnchor: [10, 10], className: '',
 });
 
+const searchIconMarker = new L.DivIcon({
+  html: '<div style="color: #EA4335;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3" fill="white"></circle></svg></div>',
+  iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32], className: '',
+});
+
 const PLACE_CATEGORIES = [
-  { key: 'police', label: 'Police', icon: Shield, color: '#3b82f6', leafletColor: 'blue' },
-  { key: 'hospital', label: 'Hospitals', icon: Hospital, color: '#ef4444', leafletColor: 'red' },
-  { key: 'fire_station', label: 'Fire Station', icon: Building2, color: '#f59e0b', leafletColor: 'orange' },
-  { key: 'pharmacy', label: 'Pharmacy', icon: Hospital, color: '#10b981', leafletColor: 'green' },
+  { key: 'police', label: 'Police', icon: Shield, color: '#4285F4', leafletColor: 'blue' },
+  { key: 'hospital', label: 'Hospitals', icon: Hospital, color: '#EA4335', leafletColor: 'red' },
+  { key: 'fire_station', label: 'Fire Station', icon: Building2, color: '#FBBC05', leafletColor: 'orange' },
+  { key: 'pharmacy', label: 'Pharmacy', icon: Hospital, color: '#34A853', leafletColor: 'green' },
 ];
 
 // Overpass API for nearby places (free, no API key needed)
@@ -79,7 +84,7 @@ async function fetchRoute(from, to, mode = 'driving') {
         coords: r.geometry.coordinates.map(c => [c[1], c[0]]),
         distance: (r.distance / 1000).toFixed(1) + ' km',
         duration: Math.round(r.duration / 60) + ' min',
-        steps: r.legs[0]?.steps?.length || 0,
+        steps: r.legs[0]?.steps?.map(s => s.maneuver.instruction) || [],
       };
     }
   } catch {}
@@ -105,7 +110,7 @@ export default function SafetyMap() {
   const mapRef = useRef(null);
   const [center, setCenter] = useState(defaultCenter);
   const [userLoc, setUserLoc] = useState(null);
-  const [tileKey, setTileKey] = useState('dark');
+  const [tileKey, setTileKey] = useState('street'); // Default to light street view like Google Maps
   const [showLayers, setShowLayers] = useState(false);
 
   // Search
@@ -114,9 +119,9 @@ export default function SafetyMap() {
   const [showResults, setShowResults] = useState(false);
   const [searchMarker, setSearchMarker] = useState(null);
   const [searching, setSearching] = useState(false);
+  const [activePanel, setActivePanel] = useState('search'); // 'search', 'details', 'directions'
 
   // Directions
-  const [showDir, setShowDir] = useState(false);
   const [originText, setOriginText] = useState('');
   const [destText, setDestText] = useState('');
   const [routeCoords, setRouteCoords] = useState([]);
@@ -137,6 +142,7 @@ export default function SafetyMap() {
         const loc = [pos.coords.latitude, pos.coords.longitude];
         setUserLoc(loc);
         setCenter(loc);
+        setOriginText('Your Location');
       }, () => {}, { enableHighAccuracy: true, timeout: 8000 }
     );
   }, []);
@@ -153,53 +159,93 @@ export default function SafetyMap() {
   };
 
   // Search
-  const doSearch = async () => {
-    if (!searchQuery.trim()) return;
+  const doSearch = async (query = searchQuery) => {
+    if (!query.trim()) return;
     setSearching(true);
-    const results = await geocode(searchQuery);
+    const results = await geocode(query);
     setSearchResults(results);
     setShowResults(true);
     setSearching(false);
     if (results.length) {
-      const r = results[0];
-      const loc = [parseFloat(r.lat), parseFloat(r.lon)];
-      setSearchMarker({ pos: loc, name: r.display_name });
-      setCenter(loc);
+      selectResult(results[0]);
     }
   };
 
   const selectResult = (r) => {
     const loc = [parseFloat(r.lat), parseFloat(r.lon)];
-    setSearchMarker({ pos: loc, name: r.display_name });
+    const name = r.display_name?.split(',')[0];
+    setSearchMarker({ pos: loc, name: name, fullAddress: r.display_name });
     setCenter(loc);
     setShowResults(false);
+    setSearchQuery(name);
+    setDestText(name);
+    setActivePanel('details');
+  };
+
+  const openDirections = () => {
+    setActivePanel('directions');
+    if (!originText && userLoc) setOriginText('Your Location');
+  };
+
+  const closeDirections = () => {
+    setActivePanel(searchMarker ? 'details' : 'search');
+    setRouteCoords([]);
+    setRouteInfo(null);
+  };
+
+  const closeDetails = () => {
+    setActivePanel('search');
+    setSearchMarker(null);
+    setSearchQuery('');
+    setRouteCoords([]);
+    setRouteInfo(null);
   };
 
   // Directions
   const getDirections = async () => {
     if (!originText.trim() || !destText.trim()) return;
     setRouteLoading(true);
-    const origins = await geocode(originText);
-    const dests = await geocode(destText);
-    if (!origins.length || !dests.length) {
+    
+    let from = userLoc;
+    if (originText.toLowerCase() !== 'your location') {
+      const origins = await geocode(originText);
+      if (origins.length) from = [parseFloat(origins[0].lat), parseFloat(origins[0].lon)];
+    }
+
+    let to = searchMarker?.pos;
+    if (destText !== searchMarker?.name) {
+      const dests = await geocode(destText);
+      if (dests.length) to = [parseFloat(dests[0].lat), parseFloat(dests[0].lon)];
+    }
+
+    if (!from || !to) {
       alert('Could not find locations. Try more specific addresses.');
       setRouteLoading(false);
       return;
     }
-    const from = [parseFloat(origins[0].lat), parseFloat(origins[0].lon)];
-    const to = [parseFloat(dests[0].lat), parseFloat(dests[0].lon)];
+    
     const route = await fetchRoute(from, to, travelMode);
     setRouteLoading(false);
     if (route) {
       setRouteCoords(route.coords);
       setRouteInfo(route);
-      setCenter(from);
+      // Fit bounds to route
+      if (mapRef.current) {
+        const bounds = L.latLngBounds([from, to]);
+        route.coords.forEach(c => bounds.extend(c));
+        mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+      }
     } else {
       alert('Could not find a route. Try different locations.');
     }
   };
 
-  const clearDirections = () => { setRouteCoords([]); setRouteInfo(null); };
+  // Auto-fetch route when mode or destinations change (if directions panel is active)
+  useEffect(() => {
+    if (activePanel === 'directions' && originText && destText && !showResults) {
+      getDirections();
+    }
+  }, [travelMode, activePanel]); // simplified dependency to avoid infinite loops
 
   // Nearby places
   const toggleCategory = async (key) => {
@@ -227,96 +273,202 @@ export default function SafetyMap() {
     }
   };
 
-  const openInGoogleMaps = () => {
-    const loc = userLoc || center;
-    window.open(`https://www.google.com/maps?q=${loc[0]},${loc[1]}`, '_blank');
+  const openInGoogleMaps = (loc, name) => {
+    const q = loc ? `${loc[0]},${loc[1]}` : (userLoc ? `${userLoc[0]},${userLoc[1]}` : center.join(','));
+    window.open(`https://www.google.com/maps?q=${q}`, '_blank');
   };
 
   const tile = TILE_LAYERS[tileKey];
 
   return (
-    <div className="fixed inset-0 pt-14 lg:pt-16 pb-16 lg:pb-0 bg-surface-900 flex flex-col">
-      {/* Search Bar */}
-      <div className="relative z-30 px-3 py-2 bg-surface-900/90 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-6xl mx-auto flex items-center gap-2">
-          <div className="flex-1 relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 z-10" />
-            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && doSearch()}
-              className="input-field pl-10 py-2.5 text-sm" placeholder="Search any place, address, landmark..." />
-            {searching && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-primary-400" />}
-          </div>
-          <button onClick={doSearch} className="btn-primary py-2.5 px-4 text-sm">Search</button>
-          <button onClick={() => setShowDir(!showDir)} className={`btn-icon p-2.5 ${showDir ? 'bg-primary-500/20 text-primary-400' : 'text-surface-400'}`} title="Directions">
-            <Route size={18} />
-          </button>
-          <button onClick={shareLocation} className="btn-icon p-2.5 text-surface-400" title="Share"><Share2 size={18} /></button>
-          <button onClick={openInGoogleMaps} className="btn-icon p-2.5 text-surface-400" title="Open in Google Maps"><ExternalLink size={18} /></button>
-        </div>
-
-        {/* Search Results Dropdown */}
-        {showResults && searchResults.length > 0 && (
-          <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
-            className="absolute left-3 right-3 top-full mt-1 bg-surface-800/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl max-h-64 overflow-y-auto z-50">
-            {searchResults.map((r, i) => (
-              <button key={i} onClick={() => selectResult(r)}
-                className="w-full text-left px-4 py-3 hover:bg-surface-700/50 transition-all border-b border-white/5 last:border-0">
-                <p className="text-white text-sm font-medium truncate">{r.display_name?.split(',')[0]}</p>
-                <p className="text-surface-400 text-xs truncate mt-0.5">{r.display_name}</p>
+    <div className="fixed inset-0 pt-14 lg:pt-0 bg-gray-100 flex flex-col md:flex-row text-gray-800">
+      
+      {/* Left Panel - Google Maps Style */}
+      <div className={`absolute md:relative z-[1001] md:z-10 w-full md:w-[400px] h-[calc(100vh-3.5rem)] md:h-screen bg-white shadow-[2px_0_8px_rgba(0,0,0,0.15)] flex flex-col transition-transform duration-300 ${activePanel === 'search' && !searchQuery ? 'pointer-events-none md:pointer-events-auto bg-transparent md:bg-white shadow-none md:shadow-[2px_0_8px_rgba(0,0,0,0.15)]' : ''}`}>
+        
+        {/* Search Panel */}
+        {activePanel === 'search' && (
+          <div className="p-2 md:p-0 flex-1 flex flex-col pointer-events-auto">
+            <div className="bg-white rounded-lg md:rounded-none shadow-md md:shadow-none border border-gray-200 md:border-0 md:border-b m-2 md:m-0 flex items-center h-12 px-3 overflow-hidden">
+              <Menu size={20} className="text-gray-500 hover:text-gray-800 cursor-pointer shrink-0" />
+              <input 
+                value={searchQuery} 
+                onChange={e => {
+                  setSearchQuery(e.target.value);
+                  if(e.target.value.length > 2) doSearch(e.target.value);
+                  else setShowResults(false);
+                }}
+                onFocus={() => { if(searchQuery.length > 2) setShowResults(true); }}
+                onKeyDown={e => e.key === 'Enter' && doSearch()}
+                className="flex-1 bg-transparent border-none outline-none px-3 text-base text-gray-800 placeholder-gray-500 w-full" 
+                placeholder="Search AEGESIS Maps" 
+              />
+              {searchQuery && <X size={18} className="text-gray-400 hover:text-gray-600 cursor-pointer mr-2" onClick={() => {setSearchQuery(''); setShowResults(false);}} />}
+              <div className="w-px h-6 bg-gray-300 mx-2"></div>
+              <button onClick={() => doSearch()} className="text-blue-500 hover:text-blue-600 shrink-0">
+                {searching ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
               </button>
-            ))}
-            <button onClick={() => setShowResults(false)} className="w-full py-2 text-xs text-surface-500 hover:text-surface-300">Close results</button>
-          </motion.div>
-        )}
-      </div>
+              <button onClick={openDirections} className="ml-3 w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 shrink-0">
+                <Route size={18} />
+              </button>
+            </div>
 
-      {/* Directions Panel */}
-      <AnimatePresence>
-        {showDir && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            className="z-20 overflow-hidden bg-surface-900/95 backdrop-blur-xl border-b border-white/5">
-            <div className="max-w-6xl mx-auto p-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-emerald-400 z-10" />
-                    <input value={originText} onChange={e => setOriginText(e.target.value)} className="input-field pl-9 py-2 text-sm" placeholder="From (e.g. Connaught Place, Delhi)" />
-                  </div>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-red-400 z-10" />
-                    <input value={destText} onChange={e => setDestText(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && getDirections()}
-                      className="input-field pl-9 py-2 text-sm" placeholder="To (e.g. India Gate, Delhi)" />
-                  </div>
-                </div>
-                <button onClick={getDirections} disabled={!originText || !destText || routeLoading}
-                  className="btn-primary py-2 px-4 text-sm whitespace-nowrap flex items-center gap-1">
-                  {routeLoading ? <Loader2 size={14} className="animate-spin" /> : null} Go
-                </button>
-                {routeCoords.length > 0 && <button onClick={clearDirections} className="btn-icon p-2 text-red-400"><X size={16} /></button>}
+            {/* Quick action pills - visible when not searching */}
+            {!showResults && !searchQuery && (
+              <div className="flex gap-2 px-4 py-2 overflow-x-auto no-scrollbar border-b border-gray-100 bg-white">
+                {PLACE_CATEGORIES.map(cat => {
+                  const active = activeCategories.includes(cat.key);
+                  return (
+                    <button key={cat.key} onClick={() => toggleCategory(cat.key)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all border shadow-sm ${active ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:shadow-md'}`}>
+                      <cat.icon size={14} style={{ color: active ? '#1d4ed8' : cat.color }} />
+                      {cat.label}
+                    </button>
+                  );
+                })}
               </div>
-              <div className="flex gap-1">
-                {[{ key: 'driving', emoji: '🚗' }, { key: 'walking', emoji: '🚶' }, { key: 'cycling', emoji: '🚲' }].map(m => (
-                  <button key={m.key} onClick={() => setTravelMode(m.key)}
-                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${travelMode === m.key ? 'bg-primary-500/20 text-primary-400' : 'text-surface-400 hover:bg-surface-800'}`}>
-                    {m.emoji} {m.key.charAt(0).toUpperCase() + m.key.slice(1)}
+            )}
+
+            {/* Search Results Dropdown */}
+            {showResults && searchResults.length > 0 && (
+              <div className="flex-1 overflow-y-auto bg-white m-2 md:m-0 rounded-lg md:rounded-none shadow-md md:shadow-none">
+                {searchResults.map((r, i) => (
+                  <button key={i} onClick={() => selectResult(r)}
+                    className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-all border-b border-gray-100 flex items-start gap-3">
+                    <MapPin size={20} className="text-gray-400 mt-0.5 shrink-0" />
+                    <div className="overflow-hidden">
+                      <p className="text-gray-800 text-sm font-medium truncate">{r.display_name?.split(',')[0]}</p>
+                      <p className="text-gray-500 text-xs truncate mt-0.5">{r.display_name}</p>
+                    </div>
                   </button>
                 ))}
               </div>
-              {routeInfo && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-wrap items-center gap-3 text-xs">
-                  <span className="badge-primary"><Clock size={12} /> {routeInfo.duration}</span>
-                  <span className="badge-success"><Route size={12} /> {routeInfo.distance}</span>
-                  <span className="text-surface-400">{routeInfo.steps} step(s)</span>
-                </motion.div>
+            )}
+          </div>
+        )}
+
+        {/* Place Details Panel */}
+        {activePanel === 'details' && searchMarker && (
+          <div className="bg-white flex-1 flex flex-col pointer-events-auto h-full">
+            {/* Header Image placeholder (Google maps style) */}
+            <div className="h-48 bg-gray-200 relative w-full overflow-hidden shrink-0">
+               <img src={`https://maps.googleapis.com/maps/api/streetview?size=400x200&location=${searchMarker.pos[0]},${searchMarker.pos[1]}&key=DEMO`} onError={(e) => { e.target.onerror = null; e.target.src = 'https://images.unsplash.com/photo-1524661135-423995f22d0b?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80'; }} className="w-full h-full object-cover" alt="Location" />
+               <button onClick={closeDetails} className="absolute top-3 left-3 w-8 h-8 bg-white/90 backdrop-blur rounded-full flex items-center justify-center text-gray-700 hover:bg-white shadow-md z-10">
+                 <ArrowLeft size={18} />
+               </button>
+            </div>
+            
+            <div className="p-5 border-b border-gray-200 shrink-0">
+              <h1 className="text-2xl font-normal text-gray-900 mb-1">{searchMarker.name}</h1>
+              <p className="text-sm text-gray-600 mb-4">{searchMarker.fullAddress}</p>
+              
+              <div className="flex justify-around mt-4">
+                <button onClick={openDirections} className="flex flex-col items-center gap-1 group">
+                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center group-hover:bg-blue-700 transition-colors">
+                    <Route size={20} />
+                  </div>
+                  <span className="text-xs font-medium text-blue-600">Directions</span>
+                </button>
+                <button onClick={() => {}} className="flex flex-col items-center gap-1 group">
+                  <div className="w-10 h-10 rounded-full border border-gray-300 text-gray-700 flex items-center justify-center group-hover:bg-gray-100 transition-colors">
+                    <Locate size={18} />
+                  </div>
+                  <span className="text-xs font-medium text-gray-700">Save</span>
+                </button>
+                <button onClick={shareLocation} className="flex flex-col items-center gap-1 group">
+                  <div className="w-10 h-10 rounded-full border border-gray-300 text-gray-700 flex items-center justify-center group-hover:bg-gray-100 transition-colors">
+                    <Share2 size={18} />
+                  </div>
+                  <span className="text-xs font-medium text-gray-700">Share</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-0 overflow-y-auto flex-1">
+              <a href={`https://www.google.com/maps/dir/?api=1&destination=${searchMarker.pos[0]},${searchMarker.pos[1]}`} target="_blank" rel="noreferrer" className="flex items-center gap-4 px-5 py-4 border-b border-gray-100 hover:bg-gray-50">
+                <ExternalLink size={20} className="text-gray-400" />
+                <span className="text-sm text-gray-700">Open in official Google Maps</span>
+              </a>
+              <div className="flex items-center gap-4 px-5 py-4 border-b border-gray-100">
+                <MapPin size={20} className="text-gray-400" />
+                <span className="text-sm text-gray-700">{searchMarker.pos[0].toFixed(5)}, {searchMarker.pos[1].toFixed(5)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Directions Panel */}
+        {activePanel === 'directions' && (
+          <div className="bg-white flex-1 flex flex-col pointer-events-auto h-full shadow-xl z-20">
+            {/* Header (Blue) */}
+            <div className="bg-blue-600 text-white p-4 shrink-0 shadow-md z-10">
+              <div className="flex items-center gap-4 mb-4">
+                <button onClick={closeDirections} className="hover:bg-blue-700 p-1.5 rounded-full transition-colors">
+                  <ArrowLeft size={20} />
+                </button>
+                <div className="flex gap-4">
+                  {[{ key: 'driving', icon: '🚗' }, { key: 'walking', icon: '🚶' }, { key: 'cycling', icon: '🚲' }].map(m => (
+                    <button key={m.key} onClick={() => {setTravelMode(m.key); setTimeout(getDirections, 100);}}
+                      className={`p-2 rounded-full transition-all ${travelMode === m.key ? 'bg-blue-800 shadow-inner' : 'hover:bg-blue-500'}`}>
+                      <span className="text-lg">{m.icon}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-3 relative">
+                <div className="flex flex-col items-center justify-center gap-1 mt-2">
+                  <div className="w-2 h-2 rounded-full border-2 border-white"></div>
+                  <div className="w-0.5 h-6 bg-blue-400 border-dotted border-l-2"></div>
+                  <div className="w-2 h-2 bg-red-500"></div>
+                </div>
+                <div className="flex-1 space-y-2">
+                  <input value={originText} onChange={e => setOriginText(e.target.value)} onKeyDown={e => e.key === 'Enter' && getDirections()} className="w-full bg-blue-700 text-white placeholder-blue-300 border-none outline-none px-3 py-1.5 rounded text-sm focus:bg-white focus:text-gray-900 transition-colors" placeholder="Choose starting point" />
+                  <input value={destText} onChange={e => setDestText(e.target.value)} onKeyDown={e => e.key === 'Enter' && getDirections()} className="w-full bg-blue-700 text-white placeholder-blue-300 border-none outline-none px-3 py-1.5 rounded text-sm focus:bg-white focus:text-gray-900 transition-colors" placeholder="Choose destination" />
+                </div>
+                <button className="self-center p-2 hover:bg-blue-700 rounded-full text-white">
+                  <MoreVertical size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Route Options / Steps */}
+            <div className="flex-1 bg-gray-50 overflow-y-auto">
+              {routeLoading ? (
+                <div className="p-8 flex flex-col items-center justify-center text-gray-500 gap-3">
+                  <Loader2 size={24} className="animate-spin text-blue-500" />
+                  <p className="text-sm">Finding best route...</p>
+                </div>
+              ) : routeInfo ? (
+                <div>
+                  <div className="bg-white p-4 border-b border-gray-200">
+                    <h2 className="text-2xl font-medium text-green-700">{routeInfo.duration}</h2>
+                    <p className="text-sm text-gray-500">{routeInfo.distance}</p>
+                    <p className="text-sm text-gray-600 mt-2">Fastest route now due to traffic conditions.</p>
+                  </div>
+                  
+                  <div className="p-4 space-y-4">
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Step-by-step</h3>
+                    {routeInfo.steps?.map((step, idx) => (
+                      <div key={idx} className="flex gap-3 border-b border-gray-100 pb-4 last:border-0">
+                        <Navigation2 size={18} className="text-gray-400 mt-0.5 shrink-0" />
+                        <p className="text-sm text-gray-700" dangerouslySetInnerHTML={{__html: step}}></p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-8 text-center text-gray-500 text-sm">
+                  Enter an origin and destination to see route.
+                </div>
               )}
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </div>
 
-      {/* Map */}
-      <div className="flex-1 relative z-10">
+      {/* Map Area */}
+      <div className="flex-1 relative z-0 h-[calc(100vh-3.5rem)] md:h-screen w-full">
         <MapContainer center={center} zoom={14} style={{ width: '100%', height: '100%' }} zoomControl={false} ref={mapRef}>
           <TileLayer url={tile.url} attribution={tile.attr} />
           <RecenterMap center={center} />
@@ -324,40 +476,37 @@ export default function SafetyMap() {
           {/* User location */}
           {userLoc && (
             <Marker position={userLoc} icon={userIcon}>
-              <Popup><b>📍 You are here</b><br />Lat: {userLoc[0].toFixed(5)}<br />Lng: {userLoc[1].toFixed(5)}</Popup>
+              <Popup className="google-popup"><b>📍 Your Location</b></Popup>
             </Marker>
           )}
 
           {/* Search marker */}
           {searchMarker && (
-            <Marker position={searchMarker.pos}>
-              <Popup>
-                <b>{searchMarker.name?.split(',')[0]}</b><br />
-                <span style={{ fontSize: 11, color: '#64748b' }}>{searchMarker.name}</span><br />
-                <a href={`https://www.google.com/maps/dir/?api=1&destination=${searchMarker.pos[0]},${searchMarker.pos[1]}`} target="_blank" rel="noreferrer"
-                  style={{ display: 'inline-block', marginTop: 6, padding: '3px 10px', background: '#7c3aed', color: 'white', borderRadius: 6, fontSize: 11, textDecoration: 'none' }}>
-                  Navigate in Google Maps
-                </a>
+            <Marker position={searchMarker.pos} icon={searchIconMarker}>
+              <Popup className="google-popup">
+                <div className="text-sm font-medium">{searchMarker.name?.split(',')[0]}</div>
+                <div className="text-xs text-gray-500 mt-1">{searchMarker.name}</div>
               </Popup>
             </Marker>
           )}
 
           {/* Route */}
-          {routeCoords.length > 0 && <Polyline positions={routeCoords} pathOptions={{ color: '#7c3aed', weight: 5, opacity: 0.85 }} />}
+          {routeCoords.length > 0 && <Polyline positions={routeCoords} pathOptions={{ color: '#4285F4', weight: 6, opacity: 0.8 }} />}
+          {routeCoords.length > 0 && <Polyline positions={routeCoords} pathOptions={{ color: '#1a73e8', weight: 2, opacity: 1 }} />}
 
           {/* Nearby places */}
           {nearbyPlaces.map(place => {
             const cat = PLACE_CATEGORIES.find(c => c.key === place.category);
             return (
-              <Marker key={place.id} position={[place.lat, place.lng]} icon={makeIcon(cat?.leafletColor || 'violet')}>
-                <Popup>
-                  <b>{place.name}</b><br />
-                  {place.addr && <span style={{ fontSize: 11, color: '#64748b' }}>{place.addr}<br /></span>}
-                  {place.phone && <span style={{ fontSize: 11 }}>📞 {place.phone}<br /></span>}
-                  {place.opening && <span style={{ fontSize: 11 }}>🕐 {place.opening}<br /></span>}
+              <Marker key={place.id} position={[place.lat, place.lng]} icon={makeIcon(cat?.leafletColor || 'blue')}>
+                <Popup className="google-popup">
+                  <div className="font-medium text-sm mb-1">{place.name}</div>
+                  {place.addr && <div className="text-xs text-gray-600 mb-1">{place.addr}</div>}
+                  {place.phone && <div className="text-xs text-blue-600 mb-1">📞 {place.phone}</div>}
+                  {place.opening && <div className="text-xs text-green-600 mb-2">🕐 {place.opening}</div>}
                   <a href={`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`} target="_blank" rel="noreferrer"
-                    style={{ display: 'inline-block', marginTop: 6, padding: '3px 10px', background: '#7c3aed', color: 'white', borderRadius: 6, fontSize: 11, textDecoration: 'none' }}>
-                    Navigate
+                    className="inline-block px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-medium no-underline hover:bg-blue-700 transition-colors">
+                    Directions
                   </a>
                 </Popup>
               </Marker>
@@ -365,72 +514,79 @@ export default function SafetyMap() {
           })}
         </MapContainer>
 
-        {/* Controls */}
-        <div className="absolute top-3 right-3 flex flex-col gap-2 z-[1000]">
-          <button onClick={goToMyLocation} className="w-10 h-10 rounded-xl bg-surface-900/90 backdrop-blur-xl border border-white/10 flex items-center justify-center text-primary-400 hover:bg-surface-800 transition-all shadow-lg" title="My Location">
-            <Crosshair size={18} />
-          </button>
-          <button onClick={() => { const m = mapRef.current; if (m) m.setZoom(m.getZoom() + 1); }}
-            className="w-10 h-10 rounded-xl bg-surface-900/90 backdrop-blur-xl border border-white/10 flex items-center justify-center text-surface-300 hover:bg-surface-800 transition-all shadow-lg">
-            <ZoomIn size={18} />
-          </button>
-          <button onClick={() => { const m = mapRef.current; if (m) m.setZoom(m.getZoom() - 1); }}
-            className="w-10 h-10 rounded-xl bg-surface-900/90 backdrop-blur-xl border border-white/10 flex items-center justify-center text-surface-300 hover:bg-surface-800 transition-all shadow-lg">
-            <ZoomOut size={18} />
-          </button>
-          <div className="relative">
-            <button onClick={() => setShowLayers(!showLayers)}
-              className={`w-10 h-10 rounded-xl bg-surface-900/90 backdrop-blur-xl border border-white/10 flex items-center justify-center transition-all shadow-lg ${showLayers ? 'text-primary-400' : 'text-surface-300 hover:bg-surface-800'}`}>
-              <Layers size={18} />
-            </button>
-            {showLayers && (
-              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-                className="absolute top-0 right-12 w-40 bg-surface-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-2 shadow-xl">
-                {[
-                  { id: 'dark', label: '🌙 Dark' },
-                  { id: 'street', label: '🗺️ Street' },
-                  { id: 'satellite', label: '🛰️ Satellite' },
-                  { id: 'topo', label: '⛰️ Terrain' },
-                ].map(t => (
-                  <button key={t.id} onClick={() => { setTileKey(t.id); setShowLayers(false); }}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all ${tileKey === t.id ? 'bg-primary-500/20 text-primary-400' : 'text-surface-300 hover:bg-surface-800'}`}>
-                    {t.label}
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </div>
+        {/* Floating Quick Action Pills (visible on mobile only when search panel is not active) */}
+        <div className="md:hidden absolute top-4 left-4 right-14 z-[1000] overflow-x-auto no-scrollbar pointer-events-none">
+          {activePanel === 'search' && !searchQuery && (
+             <div className="flex gap-2 pointer-events-auto">
+               {PLACE_CATEGORIES.map(cat => {
+                 const active = activeCategories.includes(cat.key);
+                 return (
+                   <button key={cat.key} onClick={() => toggleCategory(cat.key)}
+                     className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all shadow-md border ${active ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-200 text-gray-700'}`}>
+                     <cat.icon size={14} style={{ color: active ? '#1d4ed8' : cat.color }} />
+                     {cat.label}
+                   </button>
+                 );
+               })}
+             </div>
+          )}
         </div>
 
-        {/* Safety Places Bottom Bar */}
-        <div className="absolute bottom-3 left-3 right-3 z-[1000]">
-          <div className="bg-surface-900/90 backdrop-blur-xl border border-white/10 rounded-2xl p-3 shadow-xl">
-            <div className="flex items-center gap-2 mb-2">
-              <Shield size={14} className="text-primary-400" />
-              <span className="text-xs font-semibold text-white">Nearby Safety Points</span>
-              {loadingPlaces && <Loader2 size={12} className="animate-spin text-primary-400 ml-auto" />}
-              <button onClick={openInGoogleMaps} className="ml-auto text-[10px] text-primary-400 hover:underline flex items-center gap-1">
-                <ExternalLink size={10} /> Open Google Maps
-              </button>
-            </div>
-            <div className="flex gap-2 overflow-x-auto no-scrollbar">
-              {PLACE_CATEGORIES.map(cat => {
-                const active = activeCategories.includes(cat.key);
-                const count = nearbyPlaces.filter(p => p.category === cat.key).length;
-                return (
-                  <button key={cat.key} onClick={() => toggleCategory(cat.key)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${active ? 'text-white border' : 'text-surface-400 bg-surface-800/50 hover:bg-surface-700/50'}`}
-                    style={active ? { backgroundColor: cat.color + '20', borderColor: cat.color + '40', color: cat.color } : {}}>
-                    <cat.icon size={13} />
-                    {cat.label}
-                    {active && count > 0 && <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold" style={{ backgroundColor: cat.color + '30' }}>{count}</span>}
-                  </button>
-                );
-              })}
+        {/* Bottom Right Controls (Google Maps style) */}
+        <div className="absolute bottom-6 right-4 flex flex-col gap-3 z-[1000]">
+          
+          <button onClick={goToMyLocation} className="w-10 h-10 rounded-full bg-white shadow-md border border-gray-200 flex items-center justify-center text-gray-600 hover:text-blue-600 hover:bg-gray-50 transition-colors">
+            <Locate size={18} />
+          </button>
+          
+          <div className="flex flex-col bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+            <button onClick={() => { const m = mapRef.current; if (m) m.setZoom(m.getZoom() + 1); }}
+              className="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors border-b border-gray-200">
+              <ZoomIn size={18} />
+            </button>
+            <button onClick={() => { const m = mapRef.current; if (m) m.setZoom(m.getZoom() - 1); }}
+              className="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors">
+              <ZoomOut size={18} />
+            </button>
+          </div>
+
+          <div className="relative group">
+            <button className="w-10 h-10 rounded-xl bg-white shadow-md border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 transition-colors">
+              <Layers size={18} />
+            </button>
+            <div className="absolute bottom-0 right-12 w-32 bg-white rounded-lg shadow-xl border border-gray-200 p-1 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity mb-2">
+              {[
+                { id: 'street', label: 'Default' },
+                { id: 'satellite', label: 'Satellite' },
+                { id: 'topo', label: 'Terrain' },
+                { id: 'dark', label: 'Dark Mode' },
+              ].map(t => (
+                <button key={t.id} onClick={() => setTileKey(t.id)}
+                  className={`w-full text-left px-3 py-2 rounded text-sm font-medium transition-all ${tileKey === t.id ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}>
+                  {t.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
       </div>
+      
+      {/* Global styles for leaflet popup to match Google Maps */}
+      <style dangerouslySetInnerHTML={{__html: `
+        .leaflet-popup-content-wrapper {
+          border-radius: 8px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+          padding: 0;
+        }
+        .leaflet-popup-content {
+          margin: 12px;
+          line-height: 1.4;
+        }
+        .leaflet-container a.leaflet-popup-close-button {
+          color: #999;
+          padding: 4px 4px 0 0;
+        }
+      `}} />
     </div>
   );
 }
