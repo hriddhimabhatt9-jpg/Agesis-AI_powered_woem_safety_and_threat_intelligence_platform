@@ -27,6 +27,33 @@ export default function LiveTracking() {
   const [safeZones, setSafeZones] = useState([]);
   const watchIdRef = useRef(null);
 
+  const findNearbySafeZones = (loc) => {
+    if (!window.google || !loc) return;
+    const service = new window.google.maps.places.PlacesService(document.createElement('div'));
+    
+    // Search for police stations
+    service.nearbySearch({ location: loc, radius: 3000, type: ['police'] }, (results, status) => {
+      if (status === window.google.maps.places.PlacesServiceStatus.OK) {
+        setSafeZones(prev => {
+          const existingIds = new Set(prev.map(p => p.place_id));
+          const newZones = results.filter(r => !existingIds.has(r.place_id)).map(r => ({ ...r, category: 'police' }));
+          return [...prev, ...newZones];
+        });
+      }
+    });
+
+    // Search for hospitals
+    service.nearbySearch({ location: loc, radius: 3000, type: ['hospital'] }, (results, status) => {
+      if (status === window.google.maps.places.PlacesServiceStatus.OK) {
+        setSafeZones(prev => {
+          const existingIds = new Set(prev.map(p => p.place_id));
+          const newZones = results.filter(r => !existingIds.has(r.place_id)).map(r => ({ ...r, category: 'hospital' }));
+          return [...prev, ...newZones];
+        });
+      }
+    });
+  };
+
   const onLoad = useCallback(function callback(map) { setMap(map); }, []);
   const onUnmount = useCallback(function callback(map) { setMap(null); }, []);
 
@@ -39,6 +66,7 @@ export default function LiveTracking() {
         setLocation(loc);
         setSpeed(pos.coords.speed || 0);
         if (map) map.panTo(loc);
+        findNearbySafeZones(loc);
       },
       (err) => {
         console.warn('Geolocation Error:', err);
@@ -64,6 +92,9 @@ export default function LiveTracking() {
         setSpeed(pos.coords.speed || 0);
         setPath(prev => [...prev, loc]);
         if (map) map.panTo(loc);
+        
+        // Update safe zones every few points to save API calls
+        if (path.length % 5 === 0) findNearbySafeZones(loc);
       },
       (err) => {
         console.warn('Tracking Error:', err);
@@ -107,7 +138,17 @@ export default function LiveTracking() {
             </div>
           ) : (
             <GoogleMap mapContainerStyle={containerStyle} center={location || defaultCenter} zoom={15} onLoad={onLoad} onUnmount={onUnmount}
-              options={{ styles: [{ elementType: "geometry", stylers: [{ color: "#242f3e" }] },{ elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },{ elementType: "labels.text.fill", stylers: [{ color: "#746855" }] }, { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] }] }}>
+              options={{ 
+                styles: [
+                  { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+                  { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+                  { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+                  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+                  { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
+                ],
+                disableDefaultUI: true,
+                zoomControl: true
+              }}>
               {location && <Marker position={location} icon={{ path: window.google?.maps?.SymbolPath?.CIRCLE, scale: 8, fillColor: '#7c3aed', fillOpacity: 1, strokeWeight: 2, strokeColor: '#ffffff' }} />}
               {path.length > 1 && <Polyline path={path} options={{ strokeColor: '#7c3aed', strokeOpacity: 0.8, strokeWeight: 4 }} />}
               {safeZones.map((zone, idx) => (
