@@ -209,11 +209,13 @@ export default function PanicButton() {
             {result?.results?.map((r, i) => (
               <div key={i} className="mt-2 p-3 rounded-lg bg-surface-800/50 border border-surface-700/50">
                 <p className="text-xs text-surface-300 flex items-center gap-2 mb-2">
-                  <Check size={12} className="text-emerald-400" />
-                  <strong>{r.contact}</strong> — {r.method === 'direct' ? 'Ready to send' : `${r.method} (${r.status})`}
+                  {r.status === 'sent' ? <Check size={12} className="text-emerald-400" /> : <X size={12} className="text-red-400" />}
+                  <strong>{r.contact}</strong> — {r.method === 'direct' || r.method === 'email-direct' ? 'Action Required' : `${r.method} (${r.status})`}
                 </p>
-                {/* Show actionable buttons for direct method (no Twilio/SMTP) */}
-                {r.method === 'direct' && (
+                {r.error && <p className="text-[10px] text-red-400 mb-2">Error: {r.error}</p>}
+                
+                {/* Show actionable buttons for direct method if automatic sending failed */}
+                {(r.method === 'direct' || r.method === 'email-direct') && (
                   <div className="flex gap-2 flex-wrap">
                     {r.smsLink && (
                       <a

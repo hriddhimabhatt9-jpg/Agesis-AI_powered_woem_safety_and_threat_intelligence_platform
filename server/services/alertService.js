@@ -89,28 +89,38 @@ class AlertService {
         }
       }
 
-      // If no external service is configured, generate actionable deep links
-      // so the client can open the user's native SMS/email apps
-      if (!this.twilioReady && !this.emailReady) {
-        const smsLink = phone 
-          ? `sms:${phone}?body=${encodeURIComponent(smsText)}`
-          : null;
-        const mailtoLink = email 
-          ? `mailto:${email}?subject=${encodeURIComponent(`🚨 EMERGENCY: ${user.name} needs help!`)}&body=${encodeURIComponent(smsText)}`
-          : null;
+      // If no external service is configured, use Textbelt for free automatic SMS (1 per day limit)
+      if (!this.twilioReady && phone) {
+        try {
+          const resp = await fetch('https://textbelt.com/text', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              phone: phone,
+              message: smsText,
+              key: 'textbelt',
+            }),
+          });
+          const data = await resp.json();
+          if (data.success) {
+            results.push({ contact: name, method: 'sms', status: 'sent', phone });
+            console.log(`✅ Free SMS sent to ${name} (${phone}) via Textbelt`);
+          } else {
+            console.log(`❌ Free SMS failed for ${name} (${phone}):`, data.error);
+            // Fallback to direct method if Textbelt fails (e.g. quota exceeded)
+            const smsLink = `sms:${phone}?body=${encodeURIComponent(smsText)}`;
+            results.push({ contact: name, method: 'direct', status: 'ready', phone, smsLink, error: data.error });
+          }
+        } catch (e) {
+          console.log(`❌ Textbelt Error:`, e.message);
+          const smsLink = `sms:${phone}?body=${encodeURIComponent(smsText)}`;
+          results.push({ contact: name, method: 'direct', status: 'ready', phone, smsLink });
+        }
+      }
 
-        results.push({ 
-          contact: name, 
-          method: 'direct', 
-          status: 'ready',
-          phone: phone || rawPhone || null,
-          email: email || null,
-          smsLink,
-          mailtoLink,
-          message: smsText,
-        });
-
-        console.log(`\n${'='.repeat(50)}\n🚨 PANIC ALERT\nTo: ${name} | ${phone || rawPhone || 'no phone'} | ${email || 'no email'}\nFrom: ${user.name}\nTime: ${time}\nMap: ${mapsLink}\n${'='.repeat(50)}\n`);
+      if (!this.emailReady && email) {
+        const mailtoLink = `mailto:${email}?subject=${encodeURIComponent(`🚨 EMERGENCY: ${user.name} needs help!`)}&body=${encodeURIComponent(smsText)}`;
+        results.push({ contact: name, method: 'email-direct', status: 'ready', email, mailtoLink });
       }
     }
     return results;
