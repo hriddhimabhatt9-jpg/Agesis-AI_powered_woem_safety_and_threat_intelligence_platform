@@ -21,7 +21,7 @@ steps:
     '--region', 'asia-south1',
     '--platform', 'managed',
     '--allow-unauthenticated',
-    '--update-env-vars', 'NODE_ENV=production'
+    '--update-env-vars', 'NODE_ENV=production,JWT_SECRET=agesis-production-secret-12345'
   ]
 images:
 - 'asia-south1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/agesis:$BUILD_ID'
