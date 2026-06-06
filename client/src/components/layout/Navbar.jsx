@@ -73,7 +73,8 @@ export default function Navbar() {
               <LogOut size={18} />
             </button>
           </div>
-        </nav>
+        </div>
+      </nav>
 
       {/* Mobile Top Bar */}
       <nav className="lg:hidden fixed top-0 left-0 right-0 z-40 h-14 bg-surface-900/90 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-4">
