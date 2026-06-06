@@ -1,5 +1,9 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import { auth } from '../middleware/auth.js';
+import TA from '../models/ThreatAnalysis.js';
+import Ev from '../models/Evidence.js';
+import Al from '../models/Alert.js';
 
 const router = Router();
 
@@ -9,18 +13,14 @@ router.post('/generate', auth, async (req, res) => {
     let analyses = [], evidence = [], alerts = [];
 
     try {
-      import mongoose from 'mongoose';
       if (mongoose.connection.readyState !== 1) throw new Error('DB not connected');
       if (includeAnalyses) {
-        const TA = (await import('../models/ThreatAnalysis.js')).default;
         analyses = await TA.find({ userId: req.user._id }).sort({ createdAt: 1 }).lean();
       }
       if (includeEvidence) {
-        const Ev = (await import('../models/Evidence.js')).default;
         evidence = await Ev.find({ userId: req.user._id }).sort({ createdAt: 1 }).lean();
       }
       if (includeAlerts) {
-        const Al = (await import('../models/Alert.js')).default;
         alerts = await Al.find({ userId: req.user._id }).sort({ createdAt: 1 }).lean();
       }
     } catch {}

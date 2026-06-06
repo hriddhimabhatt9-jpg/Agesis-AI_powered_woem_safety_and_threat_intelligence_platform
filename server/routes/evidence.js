@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
+import mongoose from 'mongoose';
 import { auth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
+import Evidence from '../models/Evidence.js';
 
 const router = Router();
 
@@ -14,9 +16,7 @@ router.post('/', auth, [
     const { title, category, content, metadata, threatAnalysisId, tags } = req.body;
     
     try {
-      import mongoose from 'mongoose';
       if (mongoose.connection.readyState !== 1) throw new Error('DB not connected');
-      const Evidence = (await import('../models/Evidence.js')).default;
       const evidence = await Evidence.create({
         userId: req.user._id,
         title, category, content, metadata, threatAnalysisId, tags,
