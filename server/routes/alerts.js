@@ -1,6 +1,8 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import { auth } from '../middleware/auth.js';
 import alertService from '../services/alertService.js';
+import Alert from '../models/Alert.js';
 
 const router = Router();
 
@@ -52,7 +54,6 @@ router.post('/panic', auth, async (req, res) => {
 
     // Try to save to DB
     try {
-      import mongoose from 'mongoose';
       if (mongoose.connection.readyState !== 1) throw new Error('DB not connected');
       const mappedResults = results.map(r => ({
         name: r.contact,
