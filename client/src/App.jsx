@@ -134,6 +134,8 @@ function AppRoutes() {
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
