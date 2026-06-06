@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { alertAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import { AlertTriangle, MapPin, Loader2, Phone, Shield, Check, X, Mic, MicOff } from 'lucide-react';
+import { AlertTriangle, MapPin, Loader2, Phone, Shield, Check, X, Mic, MicOff, Mail } from 'lucide-react';
 
 export default function PanicButton() {
   const { user } = useAuth();
@@ -207,10 +207,33 @@ export default function PanicButton() {
             <p className="text-surface-400 text-xs mb-1">Contacts notified</p>
             <p className="text-white text-xl font-bold">{result?.contactsNotified || 0}</p>
             {result?.results?.map((r, i) => (
-              <p key={i} className="text-xs text-surface-400 mt-1 flex items-center gap-2">
-                <Check size={12} className="text-emerald-400" />
-                {r.contact} — {r.method} ({r.status})
-              </p>
+              <div key={i} className="mt-2 p-3 rounded-lg bg-surface-800/50 border border-surface-700/50">
+                <p className="text-xs text-surface-300 flex items-center gap-2 mb-2">
+                  <Check size={12} className="text-emerald-400" />
+                  <strong>{r.contact}</strong> — {r.method === 'direct' ? 'Ready to send' : `${r.method} (${r.status})`}
+                </p>
+                {/* Show actionable buttons for direct method (no Twilio/SMTP) */}
+                {r.method === 'direct' && (
+                  <div className="flex gap-2 flex-wrap">
+                    {r.smsLink && (
+                      <a
+                        href={r.smsLink}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg text-xs font-medium hover:bg-emerald-500/20 transition-colors"
+                      >
+                        <Phone size={12} /> Send SMS to {r.phone}
+                      </a>
+                    )}
+                    {r.mailtoLink && (
+                      <a
+                        href={r.mailtoLink}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-lg text-xs font-medium hover:bg-blue-500/20 transition-colors"
+                      >
+                        <Mail size={12} /> Send Email to {r.email}
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
 

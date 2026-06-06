@@ -20,19 +20,18 @@ router.put('/profile/step1', auth, [
 ], async (req, res) => {
   try {
     const { name, phone, primaryEmergencyContact } = req.body;
+    const updates = { primaryEmergencyContact, onboardingStep: 2 };
+    if (name) updates.name = name;
+    if (phone) updates.phone = phone;
     
     try {
       const User = (await import('../models/User.js')).default;
-      const updates = { primaryEmergencyContact, onboardingStep: 2 };
-      if (name) updates.name = name;
-      if (phone) updates.phone = phone;
-      
       const user = await User.findByIdAndUpdate(req.user._id, updates, { new: true });
       return res.json({ user: user.toSafeObject(), message: 'Step 1 completed' });
     } catch {
       // Demo mode
       const updated = demoStore.update(req.user._id || req.user.id, updates);
-      return res.json({ user: updated || req.user, message: 'Step 1 completed (demo)' });
+      return res.json({ user: updated || { ...req.user, ...updates }, message: 'Step 1 completed (demo)' });
     }
   } catch (error) {
     res.status(500).json({ error: error.message });

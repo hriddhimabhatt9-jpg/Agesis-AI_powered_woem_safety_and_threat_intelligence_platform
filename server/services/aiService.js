@@ -10,15 +10,47 @@ const THREAT_DB = {
 };
 
 function analyzeText(text) {
-  const lower = text.toLowerCase().replace(/['']/g, '');
+  const lower = text.toLowerCase().replace(/['']/g, '').replace(/[.,!?;:'"()\[\]{}]/g, ' ');
+  const words = lower.split(/\s+/).filter(w => w.length > 1);
   let score = 0; const patterns = []; let cats = {};
-  for (const [cat, words] of Object.entries(THREAT_DB)) {
+  
+  for (const [cat, keywords] of Object.entries(THREAT_DB)) {
     let catScore = 0;
-    words.forEach(w => {
-      if (lower.includes(w)) { catScore += cat === 'threat' ? 25 : cat === 'blackmail' ? 22 : 18; patterns.push(`${cat}: "${w}"`); }
+    keywords.forEach(w => {
+      if (lower.includes(w)) { 
+        const weight = cat === 'threat' ? 25 : cat === 'blackmail' ? 22 : cat === 'stalking' ? 20 : 18; 
+        catScore += weight; 
+        patterns.push(`${cat}: "${w}"`); 
+      }
     });
     cats[cat] = catScore; score += catScore;
   }
+
+  // Contextual intensity modifiers based on message characteristics
+  const exclamations = (text.match(/!/g) || []).length;
+  const caps = (text.match(/[A-Z]{2,}/g) || []).length;
+  const repeatedChars = (text.match(/(.)\1{2,}/g) || []).length;
+  const questionThreats = lower.includes('what if') || lower.includes('or else') || lower.includes('you think');
+  const urgency = lower.match(/now|immediately|right now|tonight|today|last chance|final warning/);
+  const possessiveLanguage = lower.match(/you are mine|my girl|my woman|belong to|i own|my property/);
+  const intimidation = lower.match(/regret|sorry|pay for|teach you|lesson|remember this|warned you/);
+  const conditional = lower.match(/if you don't|if you leave|if you tell|unless you|you better|you'd better/);
+
+  if (exclamations > 2) { score += 5; if (exclamations > 2) patterns.push('Aggressive punctuation (multiple !)'); }
+  if (caps > 1) { score += 8; patterns.push('Shouting (ALL CAPS usage)'); }
+  if (repeatedChars > 0 && score > 0) { score += 3; }
+  if (questionThreats) { score += 10; patterns.push('Veiled/indirect threat language'); }
+  if (urgency) { score += 12; patterns.push(`Urgency/pressure: "${urgency[0]}"`); }
+  if (possessiveLanguage) { score += 15; patterns.push(`Possessive/controlling: "${possessiveLanguage[0]}"`); }
+  if (intimidation) { score += 14; patterns.push(`Intimidation: "${intimidation[0]}"`); }
+  if (conditional) { score += 16; patterns.push(`Conditional threat: "${conditional[0]}"`); }
+
+  // Tone analysis — negative emotional weight
+  const negativeWords = ['hate','angry','furious','disgusted','sick of','tired of','done with','never','always','stop','shut up','leave me','go away'];
+  let negCount = 0;
+  negativeWords.forEach(w => { if (lower.includes(w)) negCount++; });
+  if (negCount > 0 && score > 0) { score += negCount * 4; patterns.push(`Negative emotional tone (${negCount} markers)`); }
+
   score = Math.min(score, 100);
   const topCat = Object.entries(cats).sort((a,b) => b[1]-a[1])[0];
   const category = topCat[1] > 0 ? topCat[0] : 'safe';
