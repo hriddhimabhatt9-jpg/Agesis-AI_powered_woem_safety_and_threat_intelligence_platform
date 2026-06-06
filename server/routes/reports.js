@@ -9,6 +9,8 @@ router.post('/generate', auth, async (req, res) => {
     let analyses = [], evidence = [], alerts = [];
 
     try {
+      import mongoose from 'mongoose';
+      if (mongoose.connection.readyState !== 1) throw new Error('DB not connected');
       if (includeAnalyses) {
         const TA = (await import('../models/ThreatAnalysis.js')).default;
         analyses = await TA.find({ userId: req.user._id }).sort({ createdAt: 1 }).lean();

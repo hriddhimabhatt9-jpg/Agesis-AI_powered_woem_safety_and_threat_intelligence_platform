@@ -14,6 +14,8 @@ router.post('/', auth, [
     const { title, category, content, metadata, threatAnalysisId, tags } = req.body;
     
     try {
+      import mongoose from 'mongoose';
+      if (mongoose.connection.readyState !== 1) throw new Error('DB not connected');
       const Evidence = (await import('../models/Evidence.js')).default;
       const evidence = await Evidence.create({
         userId: req.user._id,
@@ -38,6 +40,8 @@ router.post('/', auth, [
 // Get all evidence
 router.get('/', auth, async (req, res) => {
   try {
+    const mongoose = (await import('mongoose')).default;
+    if (mongoose.connection.readyState !== 1) throw new Error('DB not connected');
     const Evidence = (await import('../models/Evidence.js')).default;
     const evidence = await Evidence.find({ userId: req.user._id })
       .sort({ createdAt: -1 })
@@ -51,6 +55,8 @@ router.get('/', auth, async (req, res) => {
 // Delete evidence
 router.delete('/:id', auth, async (req, res) => {
   try {
+    const mongoose = (await import('mongoose')).default;
+    if (mongoose.connection.readyState !== 1) throw new Error('DB not connected');
     const Evidence = (await import('../models/Evidence.js')).default;
     await Evidence.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
     res.json({ message: 'Evidence deleted' });

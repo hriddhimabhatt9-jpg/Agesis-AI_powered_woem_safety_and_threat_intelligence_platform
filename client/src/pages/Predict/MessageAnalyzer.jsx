@@ -9,31 +9,26 @@ export default function MessageAnalyzer() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [language, setLanguage] = useState('english');
-  const workerRef = useRef(null);
-
-  useEffect(() => {
-    workerRef.current = new Worker(new URL('../../services/analyzer.worker.js', import.meta.url));
-    workerRef.current.onmessage = (e) => {
-      const { score, threats, isSafe } = e.data;
-      setResult({
-        riskLevel: score > 70 ? 'high' : score > 30 ? 'medium' : 'low',
-        riskScore: score,
-        category: threats.length > 0 ? threats[0].type : 'None',
-        explanation: isSafe ? 'No significant threats detected.' : `Potential threat detected: ${threats.map(t => t.type).join(', ')}.`,
-        detectedPatterns: threats.map(t => t.type),
-        suggestedActions: isSafe ? ['Continue conversation with caution'] : ['Block user', 'Report incident', 'Inform emergency contacts']
-      });
-      setLoading(false);
-    };
-
-    return () => workerRef.current?.terminate();
-  }, []);
-
   const analyze = async () => {
     if (!text.trim()) return;
     setLoading(true);
     setResult(null);
-    workerRef.current.postMessage({ text, language });
+    try {
+      const { data } = await aiAPI.analyzeMessage(text);
+      setResult(data.analysis);
+    } catch (error) {
+      console.error('Analysis error:', error);
+      setResult({
+        riskLevel: 'medium',
+        riskScore: 50,
+        category: 'Error',
+        explanation: 'Failed to connect to the AI analysis service. Please try again later.',
+        detectedPatterns: ['Analysis failed'],
+        suggestedActions: ['Try again later', 'Trust your instincts if you feel unsafe']
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const riskColors = { low: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', medium: 'text-amber-400 bg-amber-500/10 border-amber-500/20', high: 'text-red-400 bg-red-500/10 border-red-500/20', critical: 'text-red-300 bg-red-500/15 border-red-400/30' };

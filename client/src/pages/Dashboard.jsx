@@ -74,12 +74,12 @@ export default function Dashboard() {
       {/* AI Predict Tools */}
       <motion.div {...fadeUp(4)} className="mb-8">
         <h2 className="text-lg font-semibold text-white mb-4">AI Prediction Tools</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {predictTools.map((tool, i) => (
             <Link key={i} to={tool.to} className="glass-card flex items-center gap-3 p-4 hover:border-primary-500/20 transition-all duration-200">
-              <tool.icon size={20} className={tool.color} />
+              <tool.icon size={20} className={`${tool.color} shrink-0`} />
               <span className="text-surface-200 text-sm font-medium">{tool.label}</span>
-              <ChevronRight size={14} className="text-surface-600 ml-auto" />
+              <ChevronRight size={14} className="text-surface-600 ml-auto shrink-0" />
             </Link>
           ))}
         </div>

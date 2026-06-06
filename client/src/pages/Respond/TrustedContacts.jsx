@@ -35,7 +35,9 @@ export default function TrustedContacts() {
       if (additional.length) await userAPI.updateStep2({ additionalEmergencyContacts: additional });
       updateUser({ primaryEmergencyContact: primary, additionalEmergencyContacts: additional });
       setSaved(true); setTimeout(() => setSaved(false), 2000);
-    } catch { setSaved(true); setTimeout(() => setSaved(false), 2000); }
+    } catch (err) { 
+      setPhoneErrors({ general: 'Failed to save contacts. Please try again.' });
+    }
     setSaving(false);
   };
 
@@ -44,6 +46,9 @@ export default function TrustedContacts() {
       <div className="max-w-2xl mx-auto space-y-6">
         {saved && (
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm flex items-center gap-2"><Check size={16} /> Contacts saved!</motion.div>
+        )}
+        {phoneErrors.general && (
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{phoneErrors.general}</motion.div>
         )}
 
         {/* Primary */}

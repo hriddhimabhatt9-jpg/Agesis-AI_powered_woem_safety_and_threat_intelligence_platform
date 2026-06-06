@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
@@ -9,18 +9,25 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, googleLogin, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const loadingRef = useRef(false);
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) navigate('/dashboard', { replace: true });
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+    loadingRef.current = true;
     
-    // Add a safety timeout to prevent infinite loading
     const timeout = setTimeout(() => {
-      if (loading) {
+      if (loadingRef.current) {
         setLoading(false);
+        loadingRef.current = false;
         setError('Request timed out. Please try again.');
       }
     }, 15000);
@@ -28,16 +35,80 @@ export default function Login() {
     try {
       await login(form.email, form.password);
       clearTimeout(timeout);
+      loadingRef.current = false;
       navigate('/dashboard');
     } catch (err) {
       clearTimeout(timeout);
+      loadingRef.current = false;
       const msg = err.response?.data?.error || err.message || 'Login failed. Please try again.';
       setError(msg);
-      console.error('Login error:', err);
+    } finally {
+      setLoading(false);
+      loadingRef.current = false;
+    }
+  };
+
+  const handleGoogleSuccess = async (response) => {
+    setError('');
+    setLoading(true);
+    try {
+      await googleLogin({
+        credential: response.credential,
+        name: response.name,
+        email: response.email,
+        picture: response.picture,
+      });
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Google sign-in failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
+
+  // Load Google Sign-In script
+  useEffect(() => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId || clientId === 'your-google-client-id') return;
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      if (window.google?.accounts) {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (response) => {
+            // Decode the JWT to get user info
+            try {
+              const payload = JSON.parse(atob(response.credential.split('.')[1]));
+              handleGoogleSuccess({
+                credential: response.credential,
+                name: payload.name,
+                email: payload.email,
+                picture: payload.picture,
+              });
+            } catch {
+              handleGoogleSuccess({ credential: response.credential });
+            }
+          },
+        });
+        const buttonDiv = document.getElementById('google-signin-btn');
+        if (buttonDiv) {
+          window.google.accounts.id.renderButton(buttonDiv, {
+            theme: 'filled_black',
+            size: 'large',
+            width: '100%',
+            text: 'signin_with',
+            shape: 'pill',
+          });
+        }
+      }
+    };
+    document.head.appendChild(script);
+    return () => { try { document.head.removeChild(script); } catch {} };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen bg-surface-900 flex items-center justify-center px-4 py-12">
@@ -63,7 +134,7 @@ export default function Login() {
         <div className="glass-card p-8">
           {error && (
             <div className="flex items-center gap-2 p-3 mb-6 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-              <AlertCircle size={16} />{error}
+              <AlertCircle size={16} className="shrink-0" /><span>{error}</span>
             </div>
           )}
 
@@ -74,7 +145,7 @@ export default function Login() {
                 <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-surface-500" />
                 <input type="email" required value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="input-field pl-10" placeholder="you@example.com" />
+                  className="input-field pl-10" placeholder="you@example.com" id="login-email" />
               </div>
             </div>
 
@@ -84,7 +155,7 @@ export default function Login() {
                 <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-surface-500" />
                 <input type={showPassword ? 'text' : 'password'} required value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  className="input-field pl-10 pr-10" placeholder="••••••••" />
+                  className="input-field pl-10 pr-10" placeholder="••••••••" id="login-password" />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-500 hover:text-surface-300">
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -92,10 +163,20 @@ export default function Login() {
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="btn-primary w-full py-3.5">
+            <button type="submit" disabled={loading} className="btn-primary w-full py-3.5" id="login-submit">
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
+
+          {/* Google Sign-In */}
+          <div className="mt-5">
+            <div className="relative flex items-center gap-3 mb-4">
+              <div className="flex-1 h-px bg-surface-700" />
+              <span className="text-surface-500 text-xs uppercase tracking-wider">or</span>
+              <div className="flex-1 h-px bg-surface-700" />
+            </div>
+            <div id="google-signin-btn" className="flex justify-center" />
+          </div>
 
           <div className="mt-6 text-center">
             <p className="text-surface-400 text-sm">

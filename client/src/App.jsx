@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import { DisguiseProvider, useDisguise } from './context/DisguiseContext';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Components
 import DecoyNews from './components/safety/DecoyNews';
@@ -133,18 +134,18 @@ function AppRoutes() {
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
-}
-
 export default function App() {
   return (
-    <Router>
-      <DisguiseProvider>
-        <AuthProvider>
-          <SocketProvider>
-            <AppRoutes />
-          </SocketProvider>
-        </AuthProvider>
-      </DisguiseProvider>
-    </Router>
+    <ErrorBoundary>
+      <Router>
+        <DisguiseProvider>
+          <AuthProvider>
+            <SocketProvider>
+              <AppRoutes />
+            </SocketProvider>
+          </AuthProvider>
+        </DisguiseProvider>
+      </Router>
+    </ErrorBoundary>
   );
 }

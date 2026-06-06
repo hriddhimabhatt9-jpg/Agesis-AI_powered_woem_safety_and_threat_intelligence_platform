@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { evidenceAPI } from '../../services/api';
 import PageWrapper from '../../components/layout/PageWrapper';
-import { Archive, Plus, Trash2, Search, Tag, Clock, Filter } from 'lucide-react';
+import { Archive, Plus, Trash2, Search, Tag, Clock, Filter, Loader2 } from 'lucide-react';
 
 export default function EvidenceVault() {
   const [evidence, setEvidence] = useState([]);
@@ -10,21 +10,33 @@ export default function EvidenceVault() {
   const [search, setSearch] = useState('');
   const [newEvidence, setNewEvidence] = useState({ title: '', category: 'message', content: '', tags: '' });
 
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [adding, setAdding] = useState(false);
+
   useEffect(() => { loadEvidence(); }, []);
 
   const loadEvidence = async () => {
-    try { const { data } = await evidenceAPI.getAll(); setEvidence(data.evidence); }
-    catch { setEvidence([]); }
+    setLoading(true);
+    try { const { data } = await evidenceAPI.getAll(); setEvidence(data.evidence); setError(''); }
+    catch { setEvidence([]); setError('Could not load evidence. Please check your connection.'); }
+    finally { setLoading(false); }
   };
 
   const addEvidence = async () => {
     if (!newEvidence.title || !newEvidence.content) return;
+    setAdding(true);
     try {
       const { data } = await evidenceAPI.store({ ...newEvidence, tags: newEvidence.tags.split(',').map(t => t.trim()).filter(Boolean) });
       setEvidence([data.evidence, ...evidence]);
       setNewEvidence({ title: '', category: 'message', content: '', tags: '' });
       setShowAdd(false);
-    } catch {}
+      setError('');
+    } catch {
+      setError('Failed to store evidence. Please try again.');
+    } finally {
+      setAdding(false);
+    }
   };
 
   const deleteEvidence = async (id) => {
@@ -57,12 +69,23 @@ export default function EvidenceVault() {
             </div>
             <div className="mb-4"><label className="block text-xs text-surface-400 mb-1">Content *</label><textarea value={newEvidence.content} onChange={e => setNewEvidence({ ...newEvidence, content: e.target.value })} className="input-field resize-none text-sm" rows={4} placeholder="Paste message, log, or description..." /></div>
             <div className="mb-4"><label className="block text-xs text-surface-400 mb-1">Tags (comma-separated)</label><input value={newEvidence.tags} onChange={e => setNewEvidence({ ...newEvidence, tags: e.target.value })} className="input-field text-sm" placeholder="harassment, threatening, social media" /></div>
-            <div className="flex gap-3"><button onClick={addEvidence} className="btn-primary text-sm">Save Evidence</button><button onClick={() => setShowAdd(false)} className="btn-ghost text-sm">Cancel</button></div>
+            <div className="flex gap-3"><button onClick={addEvidence} disabled={adding} className="btn-primary text-sm">{adding ? 'Saving...' : 'Save Evidence'}</button><button onClick={() => setShowAdd(false)} className="btn-ghost text-sm">Cancel</button></div>
+          </motion.div>
+        )}
+
+        {error && (
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-3 mb-6 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+            {error}
           </motion.div>
         )}
 
         {/* Evidence List */}
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="glass-card p-12 flex flex-col items-center justify-center">
+            <Loader2 size={32} className="text-primary-400 animate-spin mb-3" />
+            <p className="text-surface-400 text-sm">Loading evidence...</p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="glass-card p-12 text-center"><Archive size={48} className="mx-auto mb-3 text-surface-600 opacity-30" /><p className="text-surface-500 text-sm">No evidence stored yet</p></div>
         ) : (
           <div className="space-y-3">

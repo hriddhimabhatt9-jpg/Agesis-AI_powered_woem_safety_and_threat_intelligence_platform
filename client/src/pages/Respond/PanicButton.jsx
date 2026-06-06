@@ -26,6 +26,12 @@ export default function PanicButton() {
     return contacts;
   };
 
+  const isListeningRef = useRef(isListening);
+  
+  useEffect(() => {
+    isListeningRef.current = isListening;
+  }, [isListening]);
+
   useEffect(() => {
     // Initialize speech recognition
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -44,7 +50,9 @@ export default function PanicButton() {
       };
 
       recognition.onend = () => {
-        if (isListening) recognition.start();
+        if (isListeningRef.current) {
+          try { recognition.start(); } catch {}
+        }
       };
 
       recognitionRef.current = recognition;
@@ -53,7 +61,7 @@ export default function PanicButton() {
     return () => {
       if (recognitionRef.current) recognitionRef.current.stop();
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleVoiceSOS = () => {
     if (isListening) {
@@ -85,24 +93,27 @@ export default function PanicButton() {
     setLoading(true);
     let loc = { lat: 28.6139, lng: 77.2090 };
 
+    let locationWarning = '';
     try {
       const pos = await new Promise((resolve, reject) =>
         navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000, enableHighAccuracy: true })
       );
       loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-    } catch {}
+    } catch {
+      locationWarning = ' (Warning: Live location unavailable. Using default/last known location.)';
+    }
 
     const contacts = getContacts();
 
     try {
       const { data } = await alertAPI.triggerPanic(loc, contacts);
-      setResult(data);
+      setResult({ ...data, message: data.message + locationWarning });
     } catch {
       // Even if API fails, show that contacts would be notified
       setResult({
-        message: contacts.length > 0
+        message: (contacts.length > 0
           ? `Alert sent to ${contacts.length} contact(s) (demo mode)`
-          : '⚠️ No emergency contacts! Go to Trusted Contacts to add them.',
+          : '⚠️ No emergency contacts! Go to Trusted Contacts to add them.') + locationWarning,
         contactsNotified: contacts.length,
         results: contacts.map(c => ({ contact: c.name, method: 'demo', status: 'logged' })),
         mapsLink: `https://www.google.com/maps?q=${loc.lat},${loc.lng}`,

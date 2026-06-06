@@ -58,6 +58,7 @@ export default function Navbar() {
           </div>
 
           {/* Profile */}
+          <div className="flex items-center gap-2">
             <button onClick={toggleDisguise} className="btn-icon text-surface-500 hover:text-primary-400" title="Stealth Mode">
               <EyeOff size={18} />
             </button>

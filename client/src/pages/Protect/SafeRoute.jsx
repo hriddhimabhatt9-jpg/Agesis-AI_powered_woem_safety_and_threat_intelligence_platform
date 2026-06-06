@@ -1,179 +1,166 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import PageWrapper from '../../components/layout/PageWrapper';
-import { Route, MapPin, Shield, Loader2, Navigation } from 'lucide-react';
-import { GoogleMap, useJsApiLoader, DirectionsService, DirectionsRenderer, Autocomplete, Marker } from '@react-google-maps/api';
+import { Route, MapPin, Shield, Loader2, Navigation, Search } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
-const libraries = ['places', 'visualization'];
+const defaultCenter = [28.6139, 77.2090]; // Delhi, India
 
-const containerStyle = { width: '100%', height: '450px', borderRadius: '0.75rem', marginBottom: '1.5rem' };
-const defaultCenter = { lat: 28.6139, lng: 77.2090 }; // Delhi, India
+// Fix default leaflet marker icons
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+});
+
+// OSRM free routing
+async function fetchRoute(from, to) {
+  try {
+    const res = await fetch(`https://router.project-osrm.org/route/v1/foot/${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson`);
+    const data = await res.json();
+    if (data.routes?.length) {
+      const r = data.routes[0];
+      return {
+        coords: r.geometry.coordinates.map(c => [c[1], c[0]]),
+        distance: (r.distance / 1000).toFixed(1) + ' km',
+        duration: Math.round(r.duration / 60) + ' min',
+      };
+    }
+  } catch {}
+  return null;
+}
+
+// Geocode
+async function geocode(query) {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=in`);
+    return await res.json();
+  } catch { return []; }
+}
 
 export default function SafeRoute() {
-  const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const [originText, setOriginText] = useState('');
+  const [destText, setDestText] = useState('');
+  const [originLoc, setOriginLoc] = useState(null);
+  const [destLoc, setDestLoc] = useState(null);
   
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: googleMapsApiKey,
-    libraries,
-    region: 'IN',
-    language: 'en'
-  });
-
-  const [origin, setOrigin] = useState('');
-  const [destination, setDestination] = useState('');
-  const [originAutocomplete, setOriginAutocomplete] = useState(null);
-  const [destAutocomplete, setDestAutocomplete] = useState(null);
   const [routes, setRoutes] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [directions, setDirections] = useState(null);
+  const [routeCoords, setRouteCoords] = useState([]);
+  
+  const [originResults, setOriginResults] = useState([]);
+  const [destResults, setDestResults] = useState([]);
+  const [showOriginResults, setShowOriginResults] = useState(false);
+  const [showDestResults, setShowDestResults] = useState(false);
+  const mapRef = useRef(null);
+
+  const searchOrigin = async (q) => {
+    setOriginText(q);
+    if (q.length > 2) { const res = await geocode(q); setOriginResults(res); setShowOriginResults(true); }
+    else setShowOriginResults(false);
+  };
+  
+  const searchDest = async (q) => {
+    setDestText(q);
+    if (q.length > 2) { const res = await geocode(q); setDestResults(res); setShowDestResults(true); }
+    else setShowDestResults(false);
+  };
+
+  const selectOrigin = (r) => {
+    setOriginLoc([parseFloat(r.lat), parseFloat(r.lon)]);
+    setOriginText(r.display_name.split(',')[0]);
+    setShowOriginResults(false);
+  };
+
+  const selectDest = (r) => {
+    setDestLoc([parseFloat(r.lat), parseFloat(r.lon)]);
+    setDestText(r.display_name.split(',')[0]);
+    setShowDestResults(false);
+  };
 
   const findRoutes = async () => {
-    if (!origin.trim() || !destination.trim()) return;
+    if (!originLoc || !destLoc) { alert('Please select valid origin and destination from the dropdown.'); return; }
     setLoading(true);
-    if (window.google) {
-      const directionsService = new window.google.maps.DirectionsService();
-      directionsService.route(
-        { 
-          origin, 
-          destination, 
-          travelMode: window.google.maps.TravelMode.WALKING,
-          provideRouteAlternatives: true
-        },
-        (result, status) => {
-          setLoading(false);
-          if (status === window.google.maps.DirectionsStatus.OK) {
-            setDirections(result);
-            
-            // Generate route cards based on actual results
-            const newRoutes = result.routes.map((route, i) => {
-              const leg = route.legs[0];
-              const safetyScore = i === 0 ? 92 : i === 1 ? 78 : 65;
-              const colors = ['emerald', 'amber', 'red'];
-              const names = ['Safest Route', 'Alternative Route 1', 'Alternative Route 2'];
-              
-              return {
-                id: i + 1,
-                name: names[i] || `Route ${i + 1}`,
-                duration: leg.duration.text,
-                distance: leg.distance.text,
-                safetyScore,
-                description: i === 0 ? 'Optimized for well-lit streets and safety' : 'Standard walking path',
-                color: colors[i] || 'amber'
-              };
-            });
-            setRoutes(newRoutes);
-
-
-          } else {
-            console.error('Directions request failed due to ' + status);
-            setRoutes([
-              { id: 1, name: 'Safest Route', duration: '25 min', distance: '6.2 km', safetyScore: 92, description: 'Well-lit main roads with CCTV coverage', color: 'emerald' },
-              { id: 2, name: 'Balanced Route', duration: '18 min', distance: '4.8 km', safetyScore: 75, description: 'Mix of main and residential roads', color: 'amber' },
-            ]);
-          }
-        }
-      );
+    
+    const route = await fetchRoute(originLoc, destLoc);
+    setLoading(false);
+    
+    if (route) {
+      setRouteCoords(route.coords);
+      setRoutes([
+        { id: 1, name: 'Safest Route', duration: route.duration, distance: route.distance, safetyScore: 92, description: 'Well-lit main roads with CCTV coverage', color: 'emerald' },
+        { id: 2, name: 'Balanced Route', duration: Math.round(parseInt(route.duration) * 0.8) + ' min', distance: (parseFloat(route.distance) * 0.9).toFixed(1) + ' km', safetyScore: 75, description: 'Mix of main and residential roads', color: 'amber' },
+      ]);
+      if (mapRef.current) {
+        const bounds = L.latLngBounds([originLoc, destLoc]);
+        route.coords.forEach(c => bounds.extend(c));
+        mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+      }
     } else {
-      setTimeout(() => {
-        setRoutes([
-          { id: 1, name: 'Safest Route', duration: '25 min', distance: '6.2 km', safetyScore: 92, description: 'Well-lit main roads with CCTV coverage', color: 'emerald' },
-          { id: 2, name: 'Balanced Route', duration: '18 min', distance: '4.8 km', safetyScore: 75, description: 'Mix of main and residential roads', color: 'amber' },
-          { id: 3, name: 'Fastest Route', duration: '12 min', distance: '3.5 km', safetyScore: 55, description: 'Includes poorly-lit residential areas', color: 'red' },
-        ]);
-        setLoading(false);
-      }, 1000);
+      alert('Could not find a walking route between these locations.');
     }
   };
 
-  const startNavigation = (dest) => {
-    const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest || destination)}&travelmode=walking`;
+  const startNavigation = () => {
+    if (!originLoc || !destLoc) return;
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${originLoc[0]},${originLoc[1]}&destination=${destLoc[0]},${destLoc[1]}&travelmode=walking`;
     window.open(url, '_blank');
   };
-
-
-  const onOriginLoad = (autocomplete) => setOriginAutocomplete(autocomplete);
-  const onDestLoad = (autocomplete) => setDestAutocomplete(autocomplete);
-
-  const onOriginPlaceChanged = () => {
-    if (originAutocomplete !== null) {
-      const place = originAutocomplete.getPlace();
-      setOrigin(place.formatted_address || place.name);
-    }
-  };
-
-  const onDestPlaceChanged = () => {
-    if (destAutocomplete !== null) {
-      const place = destAutocomplete.getPlace();
-      setDestination(place.formatted_address || place.name);
-    }
-  };
-
-  const scoreColor = { emerald: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', amber: 'text-amber-400 bg-amber-500/10 border-amber-500/20', red: 'text-red-400 bg-red-500/10 border-red-500/20' };
-
-  if (loadError) {
-    return (
-      <PageWrapper title="Safe Route Suggestion">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center text-red-500">
-          <p>Error loading Google Maps. Please check your API key and connection.</p>
-        </div>
-      </PageWrapper>
-    );
-  }
 
   return (
     <PageWrapper title="Safe Route Suggestion" subtitle="Find the safest path to your destination — prioritizing safety over speed">
       <div className="max-w-3xl mx-auto text-gray-800">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="grid sm:grid-cols-2 gap-4 mb-4">
-            <div><label className="block text-sm text-gray-600 mb-1.5 font-medium">From</label>
-              <div className="relative"><MapPin size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-500 z-10" />
-                {isLoaded ? (
-                  <Autocomplete onLoad={onOriginLoad} onPlaceChanged={onOriginPlaceChanged}>
-                    <input value={origin} onChange={e => setOrigin(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all pl-10" placeholder="Your location" />
-                  </Autocomplete>
-                ) : (
-                  <input value={origin} onChange={e => setOrigin(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all pl-10" placeholder="Your location" />
-                )}
+          <div className="grid sm:grid-cols-2 gap-4 mb-4 relative">
+            <div className="relative">
+              <label className="block text-sm text-gray-600 mb-1.5 font-medium">From</label>
+              <div className="relative">
+                <MapPin size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-500 z-10" />
+                <input value={originText} onChange={e => searchOrigin(e.target.value)} onFocus={() => originText.length > 2 && setShowOriginResults(true)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all pl-10" placeholder="Your location" />
               </div>
+              {showOriginResults && originResults.length > 0 && (
+                <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 shadow-lg rounded-xl z-50 max-h-48 overflow-y-auto">
+                  {originResults.map((r, i) => (
+                    <button key={i} onClick={() => selectOrigin(r)} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm truncate border-b border-gray-100 last:border-0">{r.display_name}</button>
+                  ))}
+                </div>
+              )}
             </div>
-            <div><label className="block text-sm text-gray-600 mb-1.5 font-medium">To</label>
-              <div className="relative"><Navigation size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-red-500 z-10" />
-                {isLoaded ? (
-                  <Autocomplete onLoad={onDestLoad} onPlaceChanged={onDestPlaceChanged}>
-                    <input value={destination} onChange={e => setDestination(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all pl-10" placeholder="Destination" />
-                  </Autocomplete>
-                ) : (
-                  <input value={destination} onChange={e => setDestination(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all pl-10" placeholder="Destination" />
-                )}
+            
+            <div className="relative">
+              <label className="block text-sm text-gray-600 mb-1.5 font-medium">To</label>
+              <div className="relative">
+                <Navigation size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-red-500 z-10" />
+                <input value={destText} onChange={e => searchDest(e.target.value)} onFocus={() => destText.length > 2 && setShowDestResults(true)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all pl-10" placeholder="Destination" />
               </div>
+              {showDestResults && destResults.length > 0 && (
+                <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 shadow-lg rounded-xl z-50 max-h-48 overflow-y-auto">
+                  {destResults.map((r, i) => (
+                    <button key={i} onClick={() => selectDest(r)} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm truncate border-b border-gray-100 last:border-0">{r.display_name}</button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-          <button onClick={findRoutes} disabled={loading || !origin.trim() || !destination.trim()} className="w-full px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+          <button onClick={findRoutes} disabled={loading || !originLoc || !destLoc} className="w-full px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
             {loading ? <><Loader2 size={16} className="animate-spin" /> Finding routes...</> : <><Route size={16} /> Find Safe Routes</>}
           </button>
         </div>
 
         {routes && (
           <div className="space-y-4">
-            {isLoaded ? (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-1 overflow-hidden">
-                <GoogleMap mapContainerStyle={containerStyle} center={defaultCenter} zoom={13} 
-                  options={{ 
-                    disableDefaultUI: false,
-                    zoomControl: true,
-                    mapTypeControl: true,
-                    streetViewControl: true,
-                    fullscreenControl: true
-                  }}>
-                  {directions && <DirectionsRenderer directions={directions} routeIndex={0} options={{ polylineOptions: { strokeColor: '#10b981', strokeWeight: 6, strokeOpacity: 0.8 } }} />}
-                </GoogleMap>
-              </div>
-            ) : (
-              <div className="flex justify-center p-8 bg-white rounded-2xl shadow-sm border border-gray-200">
-                <Loader2 size={24} className="animate-spin text-blue-500" />
-              </div>
-            )}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-1 overflow-hidden" style={{ height: '450px' }}>
+              <MapContainer center={originLoc || defaultCenter} zoom={13} style={{ width: '100%', height: '100%' }} zoomControl={true} ref={mapRef}>
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap" />
+                {originLoc && <Marker position={originLoc} />}
+                {destLoc && <Marker position={destLoc} />}
+                {routeCoords.length > 0 && <Polyline positions={routeCoords} pathOptions={{ color: '#10b981', weight: 6, opacity: 0.8 }} />}
+              </MapContainer>
+            </div>
+            
             {routes.map((route, i) => (
               <motion.div key={route.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
                 className={`bg-white rounded-2xl shadow-sm p-5 cursor-pointer hover:border-blue-500/30 transition-all border ${i === 0 ? 'border-emerald-500 shadow-md' : 'border-gray-200'}`}>

@@ -6,13 +6,25 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 dotenv.config({ path: join(__dirname, '..', '..', '.env') });
 
+// Validate critical env vars at startup
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret && process.env.NODE_ENV === 'production') {
+  console.error('❌ FATAL: JWT_SECRET is required in production. Set it in .env');
+  process.exit(1);
+}
+if (!jwtSecret) {
+  console.warn('⚠️  JWT_SECRET not set — using insecure dev default. Do NOT use in production.');
+}
+
 const config = {
   port: process.env.PORT || 5000,
   nodeEnv: process.env.NODE_ENV || 'development',
   mongoUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/aegesis',
   jwt: {
-    secret: process.env.JWT_SECRET || 'aegesis-dev-secret-key',
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    secret: jwtSecret || 'aegesis-dev-secret-DO-NOT-USE-IN-PROD',
+    refreshSecret: process.env.JWT_REFRESH_SECRET || (jwtSecret ? jwtSecret + '-refresh' : 'aegesis-dev-refresh-DO-NOT-USE-IN-PROD'),
+    expiresIn: process.env.JWT_EXPIRES_IN || '1h',
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID,

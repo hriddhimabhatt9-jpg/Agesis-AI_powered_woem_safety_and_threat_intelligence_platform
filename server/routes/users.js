@@ -78,8 +78,10 @@ router.put('/privacy', auth, async (req, res) => {
       }, { new: true });
       return res.json({ user: user.toSafeObject() });
     } catch {
-      req.user.privacySettings = { showLocation, showPhone, showProfession };
-      return res.json({ user: req.user });
+      const updated = demoStore.update(req.user._id || req.user.id, { 
+        privacySettings: { showLocation, showPhone, showProfession } 
+      });
+      return res.json({ user: updated || { ...req.user, privacySettings: { showLocation, showPhone, showProfession } } });
     }
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -95,8 +97,8 @@ router.put('/safety-mode', auth, async (req, res) => {
       const user = await User.findByIdAndUpdate(req.user._id, { activeSafetyMode: mode }, { new: true });
       return res.json({ user: user.toSafeObject() });
     } catch {
-      req.user.activeSafetyMode = mode;
-      return res.json({ user: req.user });
+      const updated = demoStore.update(req.user._id || req.user.id, { activeSafetyMode: mode });
+      return res.json({ user: updated || { ...req.user, activeSafetyMode: mode } });
     }
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -112,8 +114,8 @@ router.put('/defense-mode', auth, async (req, res) => {
       const user = await User.findByIdAndUpdate(req.user._id, { defenseMode: mode }, { new: true });
       return res.json({ user: user.toSafeObject() });
     } catch {
-      req.user.defenseMode = mode;
-      return res.json({ user: req.user });
+      const updated = demoStore.update(req.user._id || req.user.id, { defenseMode: mode });
+      return res.json({ user: updated || { ...req.user, defenseMode: mode } });
     }
   } catch (error) {
     res.status(500).json({ error: error.message });

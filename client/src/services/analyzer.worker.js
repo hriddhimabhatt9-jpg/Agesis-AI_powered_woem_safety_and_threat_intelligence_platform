@@ -2,11 +2,7 @@
 self.onmessage = (e) => {
   const { text, language } = e.data;
   
-  // Simulate heavy computation
-  const start = Date.now();
-  while (Date.now() - start < 500) {
-    // Artificial delay for UI worker demonstration
-  }
+  // Artificial delay removed
 
   const results = analyze(text, language);
   self.postMessage(results);

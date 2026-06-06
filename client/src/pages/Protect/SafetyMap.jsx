@@ -102,7 +102,7 @@ async function geocode(query) {
 // Component to recenter map
 function RecenterMap({ center }) {
   const map = useMap();
-  useEffect(() => { if (center) map.flyTo(center, map.getZoom()); }, [center]);
+  useEffect(() => { if (center && map) map.flyTo(center, map.getZoom()); }, [center, map]);
   return null;
 }
 
@@ -363,6 +363,17 @@ export default function SafetyMap() {
           {/* Tracking Path */}
           {tracking && path.length > 1 && <Polyline positions={path} pathOptions={{ color: '#7c3aed', weight: 4, opacity: 0.8 }} />}
 
+          {/* Nearby Places */}
+          {nearbyPlaces.map(p => (
+            <Marker key={p.id} position={[p.lat, p.lng]} icon={makeIcon(PLACE_CATEGORIES.find(c => c.key === p.category)?.leafletColor || 'blue')}>
+              <Popup className="google-popup">
+                <div className="font-bold">{p.name}</div>
+                {p.addr && <div className="text-xs mt-1">{p.addr}</div>}
+                {p.phone && <div className="text-xs mt-1">📞 {p.phone}</div>}
+              </Popup>
+            </Marker>
+          ))}
+
         </MapContainer>
 
         {/* Live Tracking Info Panel */}
@@ -476,6 +487,19 @@ export default function SafetyMap() {
                   ))}
                 </div>
               )}
+
+              {/* Nearby Categories */}
+              {!showResults && (
+                <div className="mt-4 flex gap-2 overflow-x-auto no-scrollbar pointer-events-auto pb-2">
+                  {PLACE_CATEGORIES.map(c => (
+                    <button key={c.key} onClick={() => toggleCategory(c.key)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-full border shadow-sm whitespace-nowrap transition-colors ${activeCategories.includes(c.key) ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
+                      <c.icon size={16} color={c.color} />
+                      <span className="text-sm font-medium">{c.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -584,7 +608,7 @@ export default function SafetyMap() {
                       {routeInfo.steps?.map((step, idx) => (
                         <div key={idx} className="flex gap-3 border-b border-gray-100 pb-4 last:border-0">
                           <Navigation2 size={18} className="text-gray-400 mt-0.5 shrink-0" />
-                          <p className="text-sm text-gray-700" dangerouslySetInnerHTML={{__html: step}}></p>
+                          <p className="text-sm text-gray-700">{step}</p>
                         </div>
                       ))}
                     </div>

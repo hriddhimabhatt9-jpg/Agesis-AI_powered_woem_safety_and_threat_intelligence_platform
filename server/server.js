@@ -30,7 +30,7 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: { 
     origin: config.nodeEnv === 'production' ? config.clientUrl : [config.clientUrl, 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'], 
-    methods: ['GET', 'POST'], 
+    methods: ['GET', 'POST', 'PUT', 'DELETE'], 
     credentials: true 
   },
 });
@@ -49,13 +49,34 @@ app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Rate limiting
-const limiter = rateLimit({
+// Rate limiting — separate limits for different endpoint types
+const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 300,
   message: { error: 'Too many requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
-app.use('/api/', limiter);
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: 'Too many authentication attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const aiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 15,
+  message: { error: 'AI rate limit exceeded. Please wait a moment before trying again.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api/', generalLimiter);
+app.use('/api/auth', authLimiter);
+app.use('/api/ai', aiLimiter);
 
 // Routes
 app.use('/api/auth', authRoutes);

@@ -31,9 +31,12 @@ export const auth = async (req, res, next) => {
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ error: 'Token expired' });
+      return res.status(401).json({ error: 'Token expired', tokenExpired: true });
     }
-    res.status(401).json({ error: 'Invalid token' });
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    res.status(401).json({ error: 'Authentication failed' });
   }
 };
 
@@ -45,11 +48,11 @@ export const optionalAuth = async (req, res, next) => {
       try {
         req.user = await User.findById(decoded.userId);
       } catch {
-        req.user = { _id: decoded.userId, email: decoded.email };
+        req.user = demoStore.getById(decoded.userId) || { _id: decoded.userId, email: decoded.email };
       }
     }
   } catch {
-    // Not authenticated — that's fine
+    // Not authenticated — that's fine for optional auth
   }
   next();
 };

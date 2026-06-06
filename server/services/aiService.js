@@ -31,18 +31,40 @@ class AIService {
 
   async callOpenAI(messages, opts = {}) {
     if (!this.apiKey || this.apiKey.startsWith('your-')) return null;
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), opts.timeout || 30000);
+    
     try {
-      const r = await fetch(this.baseUrl, { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${this.apiKey}`},
-        body: JSON.stringify({model:opts.model||'gpt-3.5-turbo',messages,temperature:opts.temperature||0.7,max_tokens:opts.maxTokens||1000})});
-      if(!r.ok) return null;
-      const d=await r.json(); return d.choices[0].message.content;
-    } catch { return null; }
+      const r = await fetch(this.baseUrl, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.apiKey}` },
+        body: JSON.stringify({ model: opts.model || 'gpt-3.5-turbo', messages, temperature: opts.temperature || 0.7, max_tokens: opts.maxTokens || 1000 }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      
+      if (!r.ok) {
+        console.error(`[OpenAI Error] Status: ${r.status} ${r.statusText}`);
+        return null;
+      }
+      const d = await r.json(); 
+      return d.choices[0].message.content;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        console.error('[OpenAI Error] Request timed out');
+      } else {
+        console.error('[OpenAI Error] Fetch failed:', error.message);
+      }
+      return null;
+    }
   }
 
   async analyzeMessage(text) {
     const sysPrompt = `You analyze messages for threats. Return JSON: {"riskLevel":"low|medium|high|critical","riskScore":0-100,"category":"harassment|threat|manipulation|stalking|blackmail|safe","explanation":"...","detectedPatterns":["..."],"suggestedActions":["..."]}`;
     const aiResult = await this.callOpenAI([{role:'system',content:sysPrompt},{role:'user',content:`Analyze: "${text}"`}],{temperature:0.3});
-    if(aiResult) try{return JSON.parse(aiResult)}catch{}
+    if(aiResult) try{return JSON.parse(aiResult)}catch(e){console.warn('[OpenAI Warning] Malformed JSON response:', e.message);}
 
     const a = analyzeText(text);
     const explanations = {
@@ -65,7 +87,7 @@ class AIService {
 
   async decodeIntent(conversation) {
     const aiResult = await this.callOpenAI([{role:'system',content:'Decode psychological intent. Return JSON with riskLevel,riskScore,psychologicalIntent,detectedPatterns,explanation,suggestedActions,category'},{role:'user',content:conversation}],{temperature:0.3});
-    if(aiResult) try{return JSON.parse(aiResult)}catch{}
+    if(aiResult) try{return JSON.parse(aiResult)}catch(e){console.warn('[OpenAI Warning] Malformed JSON response:', e.message);}
 
     const a = analyzeText(conversation);
     const lines = conversation.split('\n').filter(l=>l.trim());
@@ -84,7 +106,7 @@ class AIService {
 
   async checkEscalation(previousAnalyses) {
     const aiResult = await this.callOpenAI([{role:'system',content:'Analyze behavior escalation. Return JSON with riskLevel,riskScore,escalationDetected,escalationRate,explanation,predictedNextStep,suggestedActions,detectedPatterns'},{role:'user',content:JSON.stringify(previousAnalyses)}],{temperature:0.3});
-    if(aiResult) try{return JSON.parse(aiResult)}catch{}
+    if(aiResult) try{return JSON.parse(aiResult)}catch(e){console.warn('[OpenAI Warning] Malformed JSON response:', e.message);}
 
     if(!previousAnalyses||previousAnalyses.length<2) return {riskLevel:'low',riskScore:15,escalationDetected:false,escalationRate:'insufficient-data',explanation:'Need at least 2 timeline entries to detect escalation patterns. Add more entries with dates to track behavior over time.',predictedNextStep:'Add more data points for accurate prediction',suggestedActions:['Add more conversation samples','Include dates for each entry','Track changes over at least 2-3 interactions'],detectedPatterns:['Insufficient data for analysis']};
 
@@ -98,7 +120,7 @@ class AIService {
 
   async scanDigitalShadow(query) {
     const aiResult = await this.callOpenAI([{role:'system',content:'Analyze digital exposure risks. Return JSON with riskLevel,riskScore,explanation,exposureData:{potentialRisks,protectionTips},suggestedActions,detectedPatterns'},{role:'user',content:query}],{temperature:0.5});
-    if(aiResult) try{return JSON.parse(aiResult)}catch{}
+    if(aiResult) try{return JSON.parse(aiResult)}catch(e){console.warn('[OpenAI Warning] Malformed JSON response:', e.message);}
 
     const isEmail=query.includes('@'),isPhone=/\+?\d{10,}/.test(query);
     const riskData={
@@ -113,7 +135,7 @@ class AIService {
 
   async detectImpersonation(profileData) {
     const aiResult = await this.callOpenAI([{role:'system',content:'Detect fake profile indicators. Return JSON with riskLevel,riskScore,explanation,detectedPatterns,suggestedActions'},{role:'user',content:JSON.stringify(profileData)}],{temperature:0.3});
-    if(aiResult) try{return JSON.parse(aiResult)}catch{}
+    if(aiResult) try{return JSON.parse(aiResult)}catch(e){console.warn('[OpenAI Warning] Malformed JSON response:', e.message);}
 
     let score=0;const flags=[];
     const p=profileData;
@@ -130,7 +152,7 @@ class AIService {
 
   async simulateAttack(scenario) {
     const aiResult = await this.callOpenAI([{role:'system',content:'Create educational attack simulation showing predator tactics. Return JSON with riskLevel,riskScore,explanation,attackSteps:[{step,phase,description,indicators}],suggestedActions,detectedPatterns'},{role:'user',content:scenario}],{temperature:0.7});
-    if(aiResult) try{return JSON.parse(aiResult)}catch{}
+    if(aiResult) try{return JSON.parse(aiResult)}catch(e){console.warn('[OpenAI Warning] Malformed JSON response:', e.message);}
 
     const lower=scenario.toLowerCase();
     const sims={
@@ -146,7 +168,10 @@ class AIService {
   async getEmotionalSupport(userState) {
     const sysPrompt = `You are a compassionate AI safety companion for women. Be concise, highly structured, clear, and informative (like ChatGPT). Provide practical steps. Indian context — mention Indian helplines (Women Helpline 181, Police 112, iCall 9152987821). Return JSON: {"response":"...","stressLevel":"low|moderate|high|severe","suggestedActions":["..."],"resources":["..."],"needsProfessionalHelp":false}`;
     const aiResult = await this.callOpenAI([{role:'system',content:sysPrompt},{role:'user',content:userState}],{temperature:0.7});
-    if(aiResult) try{return JSON.parse(aiResult)}catch{return{response:aiResult,stressLevel:'moderate',suggestedActions:['Take care of yourself'],resources:['Women Helpline: 181'],needsProfessionalHelp:false};}
+    if(aiResult) try{return JSON.parse(aiResult)}catch(e){
+      console.warn('[OpenAI Warning] Malformed JSON response:', e.message);
+      return{response:aiResult,stressLevel:'moderate',suggestedActions:['Take care of yourself'],resources:['Women Helpline: 181'],needsProfessionalHelp:false};
+    }
 
     const lower = userState.toLowerCase();
     const isAnxious=lower.match(/anxious|anxiety|panic|scared|afraid|terrified|worry|worried|nervous|shaking/);

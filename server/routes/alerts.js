@@ -52,8 +52,14 @@ router.post('/panic', auth, async (req, res) => {
 
     // Try to save to DB
     try {
-      const Alert = (await import('../models/Alert.js')).default;
-      await Alert.create({ userId: user._id, type: 'panic', location: { ...loc, googleMapsLink: mapsLink }, contactsNotified: results, status: 'sent' });
+      import mongoose from 'mongoose';
+      if (mongoose.connection.readyState !== 1) throw new Error('DB not connected');
+      const mappedResults = results.map(r => ({
+        name: r.contact,
+        notifiedVia: r.method === 'demo' ? 'sms' : r.method,
+        deliveredAt: new Date()
+      }));
+      await Alert.create({ userId: user._id, type: 'panic', location: { ...loc, googleMapsLink: mapsLink }, contactsNotified: mappedResults, status: 'sent' });
     } catch {}
 
     res.json({
@@ -71,6 +77,8 @@ router.post('/panic', auth, async (req, res) => {
 // Get alert history
 router.get('/history', auth, async (req, res) => {
   try {
+    const mongoose = (await import('mongoose')).default;
+    if (mongoose.connection.readyState !== 1) throw new Error('DB not connected');
     const Alert = (await import('../models/Alert.js')).default;
     const alerts = await Alert.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(20).lean();
     res.json({ alerts });
@@ -80,6 +88,8 @@ router.get('/history', auth, async (req, res) => {
 // Resolve alert
 router.put('/:alertId/resolve', auth, async (req, res) => {
   try {
+    const mongoose = (await import('mongoose')).default;
+    if (mongoose.connection.readyState !== 1) throw new Error('DB not connected');
     const Alert = (await import('../models/Alert.js')).default;
     const alert = await Alert.findOneAndUpdate({ _id: req.params.alertId, userId: req.user._id }, { status: 'resolved', resolvedAt: new Date() }, { new: true });
     res.json({ alert });
