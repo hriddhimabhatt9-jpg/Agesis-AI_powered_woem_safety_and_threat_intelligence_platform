@@ -14,8 +14,6 @@ router.get('/profile', auth, async (req, res) => {
 
 // Update profile Step 1
 router.put('/profile/step1', auth, [
-  body('name').trim().notEmpty().withMessage('Name is required'),
-  body('phone').trim().notEmpty().withMessage('Phone is required'),
   body('primaryEmergencyContact.name').trim().notEmpty().withMessage('Emergency contact name is required'),
   body('primaryEmergencyContact.phone').trim().notEmpty().withMessage('Emergency contact phone is required'),
   validate,
@@ -25,16 +23,15 @@ router.put('/profile/step1', auth, [
     
     try {
       const User = (await import('../models/User.js')).default;
-      const user = await User.findByIdAndUpdate(req.user._id, {
-        name, phone, primaryEmergencyContact,
-        onboardingStep: 2,
-      }, { new: true });
+      const updates = { primaryEmergencyContact, onboardingStep: 2 };
+      if (name) updates.name = name;
+      if (phone) updates.phone = phone;
+      
+      const user = await User.findByIdAndUpdate(req.user._id, updates, { new: true });
       return res.json({ user: user.toSafeObject(), message: 'Step 1 completed' });
     } catch {
       // Demo mode
-      const updated = demoStore.update(req.user._id || req.user.id, { 
-        name, phone, primaryEmergencyContact, onboardingStep: 2 
-      });
+      const updated = demoStore.update(req.user._id || req.user.id, updates);
       return res.json({ user: updated || req.user, message: 'Step 1 completed (demo)' });
     }
   } catch (error) {
@@ -49,16 +46,22 @@ router.put('/profile/step2', auth, async (req, res) => {
     
     try {
       const User = (await import('../models/User.js')).default;
-      const user = await User.findByIdAndUpdate(req.user._id, {
-        ageGroup, profession, approximateLocation,
-        additionalEmergencyContacts: additionalEmergencyContacts?.slice(0, 3),
-        profileCompleted: true,
-      }, { new: true });
+      const updates = { profileCompleted: true };
+      if (ageGroup !== undefined) updates.ageGroup = ageGroup;
+      if (profession !== undefined) updates.profession = profession;
+      if (approximateLocation !== undefined) updates.approximateLocation = approximateLocation;
+      if (additionalEmergencyContacts) updates.additionalEmergencyContacts = additionalEmergencyContacts.slice(0, 3);
+
+      const user = await User.findByIdAndUpdate(req.user._id, updates, { new: true });
       return res.json({ user: user.toSafeObject(), message: 'Profile completed' });
     } catch {
-      const updated = demoStore.update(req.user._id || req.user.id, { 
-        ageGroup, profession, approximateLocation, additionalEmergencyContacts, profileCompleted: true 
-      });
+      const updates = { profileCompleted: true };
+      if (ageGroup !== undefined) updates.ageGroup = ageGroup;
+      if (profession !== undefined) updates.profession = profession;
+      if (approximateLocation !== undefined) updates.approximateLocation = approximateLocation;
+      if (additionalEmergencyContacts) updates.additionalEmergencyContacts = additionalEmergencyContacts.slice(0, 3);
+      
+      const updated = demoStore.update(req.user._id || req.user.id, updates);
       return res.json({ user: updated || req.user, message: 'Profile completed (demo)' });
     }
   } catch (error) {

@@ -49,9 +49,8 @@ import LegalReport from './pages/Prove/LegalReport';
 import EmotionalSupport from './pages/Recovery/EmotionalSupport';
 import LegalRoadmap from './pages/Recovery/LegalRoadmap';
 
-// Protected Route wrapper — forces login + onboarding for new users
 function ProtectedRoute({ children, skipOnboarding }) {
-  const { isAuthenticated, loading, needsOnboarding } = useAuth();
+  const { isAuthenticated, loading, needsOnboarding, completeOnboarding } = useAuth();
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-900 flex items-center justify-center">
@@ -62,7 +61,7 @@ function ProtectedRoute({ children, skipOnboarding }) {
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   // Show onboarding overlay for new users
   if (needsOnboarding && !skipOnboarding) {
-    return <SafetyOnboarding onComplete={() => window.location.reload()} />;
+    return <SafetyOnboarding onComplete={() => completeOnboarding()} />;
   }
   return children;
 }
@@ -119,7 +118,7 @@ function AppRoutes() {
 
       {/* Respond */}
       <Route path="/respond/panic" element={<ProtectedRoute skipOnboarding><AppLayout><PanicButton /></AppLayout></ProtectedRoute>} />
-      <Route path="/respond/contacts" element={<ProtectedRoute><AppLayout><TrustedContacts /></AppLayout></ProtectedRoute>} />
+      <Route path="/respond/contacts" element={<ProtectedRoute skipOnboarding><AppLayout><TrustedContacts /></AppLayout></ProtectedRoute>} />
       <Route path="/respond/defense" element={<ProtectedRoute><AppLayout><AutoDefense /></AppLayout></ProtectedRoute>} />
 
       {/* Prove */}

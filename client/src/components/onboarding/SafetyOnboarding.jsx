@@ -74,6 +74,7 @@ export default function SafetyOnboarding({ onComplete }) {
             {step.action && (
               <Link 
                 to={step.action.link} 
+                onClick={() => onComplete()}
                 className="btn-secondary w-full mb-4 inline-flex items-center justify-center gap-2"
               >
                 {step.action.label}
